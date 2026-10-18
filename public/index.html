@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RideTaste</title>
+  <meta name="description" content="An AI agent that plans bike rides with café, food and sightseeing stops picked by Qloo's Taste AI.">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="icon.svg" alt="" width="32" height="32">
+      <div>
+        <h1>RideTaste</h1>
+        <p class="tagline">Bike rides planned around your taste</p>
+      </div>
+    </div>
+    <span id="data-badge" class="badge" hidden></span>
+  </header>
+
+  <main class="layout">
+    <section class="panel" aria-label="Plan a ride">
+      <form id="plan-form" class="card">
+        <h2>Plan a ride</h2>
+        <label>Start from
+          <input id="start" name="start" required value="FC Road, Pune" autocomplete="off">
+        </label>
+        <label>Distance: <output id="distance-out">15</output> km
+          <input id="distance" name="distance" type="range" min="5" max="60" step="1" value="15">
+        </label>
+        <label>Things you love <span class="hint">films, music, food, books…</span>
+          <textarea id="tastes" name="tastes" rows="2" required>Spirited Away, Prateek Kuhad, masala dosa</textarea>
+        </label>
+        <button id="plan-btn" type="submit">Plan my ride</button>
+      </form>
+
+      <div id="chat" class="card chat" hidden>
+        <h2>Chat with your ride buddy</h2>
+        <ol id="messages" class="messages" aria-live="polite"></ol>
+        <form id="chat-form" class="chat-form">
+          <input id="chat-input" placeholder="e.g. Shorter, and end near a lake" autocomplete="off" aria-label="Message">
+          <button type="submit">Send</button>
+        </form>
+        <div class="suggestions">
+          <button type="button" class="chip" data-say="Make it shorter">Shorter</button>
+          <button type="button" class="chip" data-say="More food stops, less sightseeing">More food</button>
+          <button type="button" class="chip" data-say="Only cafés please">Only cafés</button>
+        </div>
+      </div>
+
+      <p id="no-agent" class="note" hidden>
+        Chat is off because no <code>ANTHROPIC_API_KEY</code> is set. The quick plan above still works.
+      </p>
+    </section>
+
+    <section class="results" aria-label="Your ride">
+      <div id="map" class="map" role="img" aria-label="Map of the planned ride"></div>
+      <div id="ride-summary" class="summary" hidden></div>
+      <ol id="stops" class="stops"></ol>
+      <p id="empty" class="note">Your ride will appear here.</p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    Taste data by <a href="https://www.qloo.com" target="_blank" rel="noopener">Qloo</a> ·
+    Maps &amp; routing © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors ·
+    Ride safely: check the route before you go.
+  </footer>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

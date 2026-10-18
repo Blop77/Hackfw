@@ -1,0 +1,16 @@
+# One-click deploy on Render: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: ridetaste
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/status
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: QLOO_API_KEY
+        sync: false
+      - key: QLOO_BASE_URL
+        value: https://hackathon.api.qloo.com

@@ -1,0 +1,19 @@
+{
+  "name": "ridetaste",
+  "version": "0.1.0",
+  "description": "An AI agent that plans bike rides with stops picked by Qloo's Taste AI.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20.12"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.135.0"
+  }
+}
