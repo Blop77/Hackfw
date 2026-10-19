@@ -1,5 +1,7 @@
 # RideTaste 🚲
 
+[![Tests](https://github.com/Blop77/Hackfw/actions/workflows/test.yml/badge.svg)](https://github.com/Blop77/Hackfw/actions/workflows/test.yml)
+
 **An AI agent that plans bike rides around your taste.**
 
 Tell it the films, music and food you love, where you're starting and how far you want to ride.
