@@ -40,6 +40,11 @@ test('chooseStops respects maxStops', () => {
   assert.equal(chooseStops({ start: FC_ROAD, candidates, distanceKm: 20, maxStops: 2 }).stops.length, 2);
 });
 
+test('chooseStops skips whole districts', () => {
+  const candidates = [place('district', 'area', 0.99, 1), place('cafe', 'cafe', 0.5, 1.5)];
+  assert.deepEqual(chooseStops({ start: FC_ROAD, candidates, distanceKm: 10 }).stops.map((s) => s.id), ['cafe']);
+});
+
 test('chooseStops skips hotels unless asked for', () => {
   const candidates = [place('hotel', 'stay', 0.99, 1), place('cafe', 'cafe', 0.5, 1.5)];
   assert.deepEqual(chooseStops({ start: FC_ROAD, candidates, distanceKm: 10 }).stops.map((s) => s.id), ['cafe']);
