@@ -210,12 +210,13 @@ function setBusy(busy) {
 async function postJson(url, body) {
   const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  if (!res.ok) throw Object.assign(new Error(data.error || `Request failed (${res.status})`), { agentDown: Boolean(data.agentDown) });
   return data;
 }
 
+// Returns false when the AI agent is unavailable (e.g. out of credits), so the form can plan without it.
 async function sendChat(text) {
-  if (state.busy || !text.trim()) return;
+  if (state.busy || !text.trim()) return true;
   addMessage('user', text);
   const typing = addMessage('bot typing', 'Planning your ride…');
   setBusy(true);
@@ -225,9 +226,16 @@ async function sendChat(text) {
     typing.remove();
     addMessage('bot', data.reply);
     if (data.ride) showResults(data.ride);
+    return true;
   } catch (err) {
     typing.remove();
-    addMessage('error', err.message);
+    if (!err.agentDown) {
+      addMessage('error', err.message);
+      return true;
+    }
+    state.agent = false;
+    addMessage('bot', err.message);
+    return false;
   } finally {
     setBusy(false);
   }
@@ -271,8 +279,8 @@ $('plan-form').addEventListener('submit', async (e) => {
 
   if (state.agent) {
     const friend = friendTastes ? ` I'm riding with a friend who loves: ${friendTastes}.` : '';
-    sendChat(`I'm starting from ${start} and want to ride about ${distanceKm} km. Things I love: ${tastes}.${friend}`);
-    return;
+    if (await sendChat(`I'm starting from ${start} and want to ride about ${distanceKm} km. Things I love: ${tastes}.${friend}`)) return;
+    // The agent is unavailable: plan the same ride with the quick planner below.
   }
 
   setBusy(true);
