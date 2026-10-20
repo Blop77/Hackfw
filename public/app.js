@@ -7,6 +7,7 @@ const state = {
   sessionId: null,
   ride: null,
   busy: false,
+  prefer: {}, // stop-type weights set by the tweak chips when the agent is off
 };
 
 // ---------- Map ----------
@@ -233,7 +234,7 @@ async function sendChat(text) {
       addMessage('error', err.message);
       return true;
     }
-    state.agent = false;
+    setAgentMode(false);
     addMessage('bot', err.message);
     return false;
   } finally {
@@ -270,12 +271,19 @@ for (const button of document.querySelectorAll('[data-example]')) {
   });
 }
 
+function formRequest() {
+  return {
+    start: $('start').value.trim(),
+    distanceKm: Number($('distance').value),
+    tastes: $('tastes').value.trim(),
+    friendTastes: $('friend-tastes').value.trim(),
+  };
+}
+
 $('plan-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const start = $('start').value.trim();
-  const distanceKm = Number($('distance').value);
-  const tastes = $('tastes').value.trim();
-  const friendTastes = $('friend-tastes').value.trim();
+  state.prefer = {};
+  const { start, distanceKm, tastes, friendTastes } = formRequest();
 
   if (state.agent) {
     const friend = friendTastes ? ` I'm riding with a friend who loves: ${friendTastes}.` : '';
@@ -302,24 +310,68 @@ $('chat-form').addEventListener('submit', (e) => {
   sendChat(text);
 });
 
+// ---------- Tweaks without the agent ----------
+
+// When the AI chat is off, the suggestion chips still change the ride: they shorten the form's
+// distance or change the stop-type weights, then re-plan with the quick planner so Qloo picks again.
+async function tweakRide(kind, label) {
+  if (state.busy) return;
+  if (label) addMessage('user', label);
+  if (kind === 'shorter') {
+    const km = Math.max(Number($('distance').min), Math.round(Number($('distance').value) * 0.7));
+    $('distance').value = km;
+    $('distance-out').value = km;
+  } else if (kind === 'food') {
+    state.prefer = { ...state.prefer, food: 2, sight: 0.5 };
+  } else if (kind === 'cafes') {
+    state.prefer = { cafe: 1, food: 0, culture: 0, sight: 0 };
+  }
+  const typing = addMessage('bot typing', 'Planning your ride…');
+  setBusy(true);
+  try {
+    const { ride } = await postJson('/api/plan', { ...formRequest(), prefer: state.prefer });
+    typing.remove();
+    showResults(ride);
+    const n = ride.stops.length;
+    addMessage('bot', n
+      ? `Done: ${n} stop${n === 1 ? '' : 's'}, picked again by Qloo. The map shows the new ride.`
+      : 'No stops of that kind fit this ride. Try a longer distance or another button.');
+  } catch (err) {
+    typing.remove();
+    addMessage('error', err.message);
+  } finally {
+    setBusy(false);
+  }
+}
+
 for (const chip of document.querySelectorAll('[data-say]')) {
-  chip.addEventListener('click', () => sendChat(chip.dataset.say));
+  chip.addEventListener('click', async () => {
+    if (!state.agent) return tweakRide(chip.dataset.tweak, chip.textContent);
+    if (!(await sendChat(chip.dataset.say))) tweakRide(chip.dataset.tweak);
+  });
 }
 
 // ---------- Startup ----------
 
+// With the agent off, the chat card keeps its tweak chips but hides the free-text box.
+function setAgentMode(on) {
+  state.agent = on;
+  $('chat').hidden = false;
+  $('chat-title').textContent = on ? 'Chat with your ride buddy' : 'Tweak your ride';
+  $('chat-form').hidden = !on;
+  $('no-agent').hidden = on;
+}
+
 (async () => {
   try {
     const status = await (await fetch('/api/status')).json();
-    state.agent = status.agent;
-    $('chat').hidden = !status.agent;
-    $('no-agent').hidden = status.agent;
+    setAgentMode(status.agent);
     const badge = $('data-badge');
     badge.hidden = false;
     badge.textContent = status.qloo === 'live' ? 'Live Qloo data' : 'Demo data';
     badge.classList.toggle('demo', status.qloo !== 'live');
     if (status.agent) addMessage('bot', "Hi! Tell me where you're starting, how far you want to ride, and a few films, music or foods you love. Or fill in the form above.");
   } catch {
-    $('no-agent').hidden = false;
+    setAgentMode(false);
   }
 })();

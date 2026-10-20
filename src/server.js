@@ -76,6 +76,18 @@ function parseTastes(raw) {
     .slice(0, 8);
 }
 
+// Stop-type weights from the web app's tweak buttons: 0 = exclude, 1 = normal, 2 = strongly prefer.
+const PREFER_KEYS = ['cafe', 'food', 'culture', 'sight', 'stay'];
+
+function parsePrefer(raw) {
+  const prefer = {};
+  for (const key of PREFER_KEYS) {
+    const weight = raw?.[key];
+    if (typeof weight === 'number' && Number.isFinite(weight)) prefer[key] = Math.min(Math.max(weight, 0), 3);
+  }
+  return prefer;
+}
+
 async function serveStatic(req, res) {
   const urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   const file = path.resolve(PUBLIC_DIR, '.' + (urlPath === '/' ? '/index.html' : urlPath));
@@ -109,6 +121,7 @@ export function createApp({ agent, planDeps } = {}) {
           end: body.end,
           distanceKm: body.distanceKm,
           tastes: [...parseTastes(body.tastes), ...parseTastes(body.friendTastes).map((t) => ({ ...t, who: 'friend' }))],
+          prefer: parsePrefer(body.prefer),
           maxStops: body.maxStops,
         }, planDeps);
         return sendJson(res, 200, { ride });

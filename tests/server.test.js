@@ -48,6 +48,17 @@ test('POST /api/plan plans for a friend too', async () => {
   assert.deepEqual(ride.tastes.map((t) => t.who), ['you', 'friend', 'friend']);
 });
 
+test('POST /api/plan applies stop-type weights from the tweak buttons and ignores bad ones', async () => {
+  const ride = async (prefer) => (await (await post('/api/plan', { start: '18.5236,73.841', distanceKm: 15, tastes: 'Spirited Away, filter coffee', prefer })).json()).ride;
+  const cafesOnly = await ride({ cafe: 1, food: 0, culture: 0, sight: 0 });
+  assert.ok(cafesOnly.stops.length > 0);
+  assert.ok(cafesOnly.stops.every((s) => s.category === 'cafe'));
+
+  const junk = await ride({ cafe: 'lots', food: null, sight: Infinity, hotel: 5 });
+  assert.ok(junk.stops.length > 0);
+  assert.ok(junk.stops.every((s) => Number.isFinite(s.affinity)));
+});
+
 test('POST /api/plan explains bad input with 422', async () => {
   const res = await post('/api/plan', { start: '18.5,73.8', tastes: '' });
   assert.equal(res.status, 422);
