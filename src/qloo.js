@@ -77,18 +77,36 @@ function tagNames(entity) {
 }
 
 const CATEGORY_WORDS = {
-  cafe: ['cafe', 'café', 'coffee', 'tea', 'bakery', 'dessert', 'juice', 'ice cream'],
-  food: ['restaurant', 'food', 'dining', 'diner', 'eatery', 'bistro', 'kitchen', 'bar', 'pub', 'street food', 'dhaba'],
+  stay: ['hotel', 'resort', 'hostel', 'motel', 'lodging', 'guest house', 'homestay', 'laundry service', 'room service'],
+  food: ['restaurant', 'food', 'dining', 'diner', 'eatery', 'bistro', 'kitchen', 'bar', 'pub', 'street food', 'dhaba', 'grill', 'steakhouse', 'pizzeria', 'brewery', 'lunch', 'dinner'],
+  cafe: ['cafe', 'café', 'coffee', 'coffee shop', 'tea', 'tea house', 'teahouse', 'bakery', 'dessert', 'juice', 'ice cream', 'patisserie'],
   sight: ['park', 'garden', 'museum', 'monument', 'landmark', 'historic', 'temple', 'fort', 'lake', 'viewpoint', 'gallery', 'trail', 'hill', 'beach', 'attraction'],
 };
 
-/** Puts a place into 'cafe', 'food', 'sight' or 'other' using its tags and name. */
+// Whole words only, so "tea" doesn't match "steakhouse" and "bar" doesn't match "barber".
+const CATEGORY_PATTERNS = Object.fromEntries(
+  Object.entries(CATEGORY_WORDS).map(([category, words]) => [
+    category,
+    words.map((w) => new RegExp(`(?<![\\p{L}])${w}(?![\\p{L}])`, 'iu')),
+  ]),
+);
+
+/**
+ * Puts a place into 'stay', 'food', 'cafe', 'sight' or 'other' using its tags and name.
+ * The category with the most matching tags wins; ties go in the order listed above.
+ */
 export function categorize(tags, name = '') {
-  const text = [...tags, name].join(' | ').toLowerCase();
-  for (const category of ['cafe', 'food', 'sight']) {
-    if (CATEGORY_WORDS[category].some((w) => text.includes(w))) return category;
+  const texts = [...tags, name].map((t) => String(t).replace(/[_:]/g, ' '));
+  let best = 'other';
+  let bestHits = 0;
+  for (const [category, patterns] of Object.entries(CATEGORY_PATTERNS)) {
+    const hits = texts.filter((text) => patterns.some((re) => re.test(text))).length;
+    if (hits > bestHits) {
+      best = category;
+      bestHits = hits;
+    }
   }
-  return 'other';
+  return best;
 }
 
 export function parseInsightPlaces(json) {

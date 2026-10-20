@@ -33,7 +33,7 @@ function escapeHtml(text) {
   return String(text ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
-const CATEGORY = { cafe: '☕ Café', food: '🍽️ Food', sight: '🌳 Sight', other: '📍 Stop' };
+const CATEGORY = { cafe: '☕ Café', food: '🍽️ Food', sight: '🌳 Sight', stay: '🏨 Stay', other: '📍 Stop' };
 
 function renderRide(ride) {
   state.ride = ride;
