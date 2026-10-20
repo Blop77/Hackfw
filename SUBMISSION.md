@@ -60,6 +60,17 @@ where *L* is the current ride length, *T* the requested distance and \\( \lambda
 - Save and share favourite rides
 ```
 
+## How to test (add to the end of "About the project")
+
+```markdown
+## Try it in 30 seconds
+1. Open the live demo: <RENDER URL>. If the first load is slow, the free server is waking up; give it up to a minute.
+2. Click one of the **"Try one"** examples (e.g. *Ghibli & filter coffee · Pune*). The agent plans a ride with Qloo.
+3. Open **"How Qloo picked these stops"** under the map to see the Qloo entities, the places Qloo returned, and how the stops were chosen.
+4. In the chat, tap **More food** or type *"make it shorter and end near a lake"* to watch the agent re-plan.
+5. Click **Download GPX** to take the ride into Strava, Komoot or a bike computer.
+```
+
 ## Built with
 
 ```

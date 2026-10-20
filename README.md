@@ -46,6 +46,9 @@ each stop. It is told to base every claim on the tool data and never invent open
 
 ## Features
 
+- **One-click examples** so first-time visitors (and judges) see a full ride in seconds
+- **"How Qloo picked these stops"**: a panel on every ride that shows which Qloo entities your favourites matched,
+  how many places Qloo's Insights API returned, and how the stops were chosen, plus Qloo's tags on each stop
 - Chat-based planning with follow-up changes, plus a quick-plan form that works without the AI agent
 - Loop rides or one-way rides (start A, finish B)
 - Taste-matched stops with a match score and a reason for each

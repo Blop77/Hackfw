@@ -25,6 +25,12 @@
     <section class="panel" aria-label="Plan a ride">
       <form id="plan-form" class="card">
         <h2>Plan a ride</h2>
+        <div class="examples">
+          <span class="hint">New here? Try one:</span>
+          <button type="button" class="chip" data-example="0">🎬 Ghibli &amp; filter coffee · Pune</button>
+          <button type="button" class="chip" data-example="1">🎸 Indie music &amp; street food · Pune</button>
+          <button type="button" class="chip" data-example="2">🥯 Wes Anderson &amp; bagels · New York</button>
+        </div>
         <label>Start from
           <input id="start" name="start" required value="FC Road, Pune" autocomplete="off">
         </label>
@@ -59,6 +65,11 @@
     <section class="results" aria-label="Your ride">
       <div id="map" class="map" role="img" aria-label="Map of the planned ride"></div>
       <div id="ride-summary" class="summary" hidden></div>
+      <details id="how-qloo" class="card how-qloo" hidden>
+        <summary>How Qloo picked these stops</summary>
+        <p id="how-qloo-demo" class="warn" hidden>Demo mode: sample data stands in for Qloo, so these steps are simulated.</p>
+        <ol id="how-qloo-steps"></ol>
+      </details>
       <ol id="stops" class="stops"></ol>
       <p id="empty" class="note">Your ride will appear here.</p>
     </section>

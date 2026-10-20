@@ -124,7 +124,9 @@ export async function planRide({ start, end, distanceKm = 15, tastes = [], prefe
       }
     }),
   );
-  const found = lookups.filter((l) => l.entity).map((l) => ({ id: l.entity.id, name: l.entity.name, query: l.query }));
+  const found = lookups
+    .filter((l) => l.entity)
+    .map((l) => ({ id: l.entity.id, name: l.entity.name, query: l.query, type: l.entity.types?.[0] ?? null }));
   const missing = lookups.filter((l) => !l.entity).map((l) => l.query);
   if (!found.length) {
     const reason = lookups.find((l) => l.error)?.error;
@@ -154,6 +156,7 @@ export async function planRide({ start, end, distanceKm = 15, tastes = [], prefe
     tastes: found,
     missingTastes: missing,
     candidatesConsidered: candidates.length,
+    searchRadiusKm: round1(radiusKm),
     dataSource: qlooIsLive() ? 'qloo' : 'demo',
   };
 }
