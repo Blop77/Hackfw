@@ -86,6 +86,14 @@ test('categorize matches whole words and lets the most matching tags win', () =>
   assert.equal(categorize(['Business meetings', 'Morning', 'City view', 'Laundry service']), 'stay');
 });
 
+test('categorize: theatres and music venues are culture, and the name outweighs a generic tag', () => {
+  // Real tags from a live New York ride, where both came out as "Food".
+  assert.equal(categorize(['Sophisticated', 'Debit cards', 'City center', 'Dining drinking'], 'Minskoff Theatre'), 'culture');
+  assert.equal(categorize(['Cultural history', 'Central', 'Music theory', 'Stylish', 'Restaurant'], 'Jazz At Lincoln Center'), 'culture');
+  assert.equal(categorize(['Basketball court', 'Bike storage', 'Fine dining', 'Sophisticated'], 'One Hudson Yards'), 'food');
+  assert.equal(categorize(['Lunch reservations recommended', 'Asian restaurant'], 'Coriander Kitchen'), 'food');
+});
+
 test('live mode: findTasteEntity prefers the requested type', async () => {
   config.qlooApiKey = 'test-key';
   const fetchImpl = fakeFetch([

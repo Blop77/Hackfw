@@ -113,8 +113,12 @@ const CATEGORY_WORDS = {
   stay: ['hotel', 'resort', 'hostel', 'motel', 'lodging', 'guest house', 'homestay', 'laundry service', 'room service'],
   food: ['restaurant', 'food', 'dining', 'diner', 'eatery', 'bistro', 'kitchen', 'bar', 'pub', 'street food', 'dhaba', 'grill', 'steakhouse', 'pizzeria', 'brewery', 'lunch', 'dinner'],
   cafe: ['cafe', 'café', 'coffee', 'coffee shop', 'tea', 'tea house', 'teahouse', 'bakery', 'dessert', 'juice', 'ice cream', 'patisserie'],
+  culture: ['theatre', 'theater', 'concert hall', 'music venue', 'jazz', 'opera', 'performing arts', 'cinema', 'comedy club', 'bookstore', 'bookshop', 'library', 'arts centre', 'arts center'],
   sight: ['park', 'garden', 'museum', 'monument', 'landmark', 'historic', 'temple', 'fort', 'lake', 'viewpoint', 'gallery', 'trail', 'hill', 'beach', 'attraction'],
 };
+
+// A place's own name ("Minskoff Theatre") says more about it than a generic tag ("Dining drinking").
+const NAME_WEIGHT = 2;
 
 // Whole words only, so "tea" doesn't match "steakhouse" and "bar" doesn't match "barber".
 const CATEGORY_PATTERNS = Object.fromEntries(
@@ -125,15 +129,16 @@ const CATEGORY_PATTERNS = Object.fromEntries(
 );
 
 /**
- * Puts a place into 'stay', 'food', 'cafe', 'sight' or 'other' using its tags and name.
- * The category with the most matching tags wins; ties go in the order listed above.
+ * Puts a place into 'stay', 'food', 'cafe', 'culture', 'sight' or 'other' using its tags and name.
+ * The category with the most matches wins (the name counts double); ties go in the order listed above.
  */
 export function categorize(tags, name = '') {
-  const texts = [...tags, name].map((t) => String(t).replace(/[_:]/g, ' '));
+  const clean = (t) => String(t).replace(/[_:]/g, ' ');
+  const texts = [...tags.map((t) => [clean(t), 1]), [clean(name), NAME_WEIGHT]];
   let best = 'other';
   let bestHits = 0;
   for (const [category, patterns] of Object.entries(CATEGORY_PATTERNS)) {
-    const hits = texts.filter((text) => patterns.some((re) => re.test(text))).length;
+    const hits = texts.reduce((sum, [text, weight]) => sum + (patterns.some((re) => re.test(text)) ? weight : 0), 0);
     if (hits > bestHits) {
       best = category;
       bestHits = hits;
@@ -215,7 +220,8 @@ export async function findTastePlaces({ tastes, center, radiusKm, take = 40 }, {
   const places = parseInsightPlaces(json).sort((a, b) => b.affinity - a.affinity);
   // Qloo silently ignores invalid parameters, so log enough to spot an empty or far-away result.
   const nearby = places.filter((p) => haversineKm(center, p) <= radiusKm).length;
-  console.info(`Qloo insights: ${places.length} places, ${nearby} within ${Math.round(radiusKm)} km of ${center.label ?? 'start'}`);
+  const top = places.slice(0, 5).map((p) => p.affinity.toFixed(3)).join(', ');
+  console.info(`Qloo insights: ${places.length} places, ${nearby} within ${Math.round(radiusKm)} km of ${center.label ?? 'start'}; top affinities: ${top}`);
   return places;
 }
 
