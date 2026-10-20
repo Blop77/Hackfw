@@ -63,6 +63,7 @@ const TOOLS = [
           properties: {
             cafe: { type: 'number' },
             food: { type: 'number' },
+            culture: { type: 'number', description: 'Theatres, music venues, cinemas, bookshops.' },
             sight: { type: 'number' },
             stay: { type: 'number', description: 'Hotels and other places to stay. Excluded (0) unless the rider asks.' },
           },

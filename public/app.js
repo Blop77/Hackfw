@@ -33,7 +33,7 @@ function escapeHtml(text) {
   return String(text ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
-const CATEGORY = { cafe: '☕ Café', food: '🍽️ Food', sight: '🌳 Sight', stay: '🏨 Stay', other: '📍 Stop' };
+const CATEGORY = { cafe: '☕ Café', food: '🍽️ Food', culture: '🎭 Culture', sight: '🌳 Sight', stay: '🏨 Stay', other: '📍 Stop' };
 
 function renderRide(ride) {
   state.ride = ride;
@@ -165,7 +165,7 @@ function renderHowQloo(ride) {
     <li><strong>Taste → places.</strong> Qloo's Insights API looked within ${ride.searchRadiusKm} km of ${escapeHtml(ride.start.label)}
       for places that people with this taste enjoy. ${places}</li>
     <li><strong>Places → your ride.</strong> RideTaste picked the ${ride.stops.length} stop${ride.stops.length === 1 ? '' : 's'} with the best mix of
-      ${pick}, variety (cafés, food, sights) and fit to your ${ride.requestedKm} km, then routed it by bike.</li>`;
+      ${pick}, variety (cafés, food, culture, sights) and fit to your ${ride.requestedKm} km, then routed it by bike.</li>`;
 }
 
 function formatDuration(min) {

@@ -35,20 +35,79 @@ export class QlooError extends Error {
   }
 }
 
+// Qloo rate-limits bursts, and a friend ride fires many look-ups at once, so requests are
+// throttled, retried on 429/503, and cached (Qloo's hackathon guide allows private server-side caching).
+const MAX_IN_FLIGHT = 2;
+const MAX_RETRIES = 3;
+const CACHE_TTL_MS = { lookup: 12 * 60 * 60 * 1000, insights: 60 * 60 * 1000 };
+const CACHE_MAX_ENTRIES = 500;
+
+export const qlooTiming = { retryBaseMs: 1000, maxRetryMs: 8000 };
+
+const cache = new Map(); // url -> {expires, promise}
+let inFlight = 0;
+const waiting = [];
+
+/** For tests: forget cached responses. */
+export function clearQlooCache() {
+  cache.clear();
+}
+
+async function withSlot(fn) {
+  if (inFlight >= MAX_IN_FLIGHT) await new Promise((resolve) => waiting.push(resolve));
+  inFlight++;
+  try {
+    return await fn();
+  } finally {
+    inFlight--;
+    waiting.shift()?.();
+  }
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function retryDelayMs(res, attempt) {
+  const header = Number(res.headers.get('retry-after'));
+  const ms = Number.isFinite(header) && header > 0 ? header * 1000 : qlooTiming.retryBaseMs * 2 ** attempt;
+  return Math.min(ms, qlooTiming.maxRetryMs);
+}
+
+async function fetchQloo(url, path, fetchImpl) {
+  for (let attempt = 0; ; attempt++) {
+    const res = await withSlot(() =>
+      fetchImpl(url, {
+        headers: { 'X-Api-Key': config.qlooApiKey, Accept: 'application/json' },
+        signal: AbortSignal.timeout(15000),
+      }),
+    );
+    if (res.ok) return res.json();
+    if ((res.status === 429 || res.status === 503) && attempt < MAX_RETRIES) {
+      const wait = retryDelayMs(res, attempt);
+      console.warn(`Qloo ${path} returned HTTP ${res.status}; retrying in ${wait} ms`);
+      await sleep(wait);
+      continue;
+    }
+    const body = await res.text().catch(() => '');
+    throw new QlooError(`Qloo ${path} returned HTTP ${res.status}: ${body.slice(0, 300)}`, res.status);
+  }
+}
+
 async function qlooGet(path, params, fetchImpl) {
   const url = new URL(config.qlooBaseUrl + path);
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
   }
-  const res = await fetchImpl(url, {
-    headers: { 'X-Api-Key': config.qlooApiKey, Accept: 'application/json' },
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new QlooError(`Qloo ${path} returned HTTP ${res.status}: ${body.slice(0, 300)}`, res.status);
-  }
-  return res.json();
+  const key = url.toString();
+  const hit = cache.get(key);
+  if (hit && hit.expires > Date.now()) return hit.promise;
+
+  // Cache the promise, so identical requests made at the same time share one call.
+  const promise = fetchQloo(url, path, fetchImpl);
+  const ttl = path === '/v2/insights' ? CACHE_TTL_MS.insights : CACHE_TTL_MS.lookup;
+  cache.set(key, { expires: Date.now() + ttl, promise });
+  if (cache.size > CACHE_MAX_ENTRIES) cache.delete(cache.keys().next().value);
+  promise.catch(() => cache.delete(key)); // never cache failures
+  return promise;
 }
 
 // ---------- Parsing (exported for tests) ----------
@@ -113,8 +172,12 @@ const CATEGORY_WORDS = {
   stay: ['hotel', 'resort', 'hostel', 'motel', 'lodging', 'guest house', 'homestay', 'laundry service', 'room service'],
   food: ['restaurant', 'food', 'dining', 'diner', 'eatery', 'bistro', 'kitchen', 'bar', 'pub', 'street food', 'dhaba', 'grill', 'steakhouse', 'pizzeria', 'brewery', 'lunch', 'dinner'],
   cafe: ['cafe', 'café', 'coffee', 'coffee shop', 'tea', 'tea house', 'teahouse', 'bakery', 'dessert', 'juice', 'ice cream', 'patisserie'],
+  culture: ['theatre', 'theater', 'concert hall', 'music venue', 'jazz', 'opera', 'performing arts', 'cinema', 'comedy club', 'bookstore', 'bookshop', 'library', 'arts centre', 'arts center'],
   sight: ['park', 'garden', 'museum', 'monument', 'landmark', 'historic', 'temple', 'fort', 'lake', 'viewpoint', 'gallery', 'trail', 'hill', 'beach', 'attraction'],
 };
+
+// A place's own name ("Minskoff Theatre") says more about it than a generic tag ("Dining drinking").
+const NAME_WEIGHT = 2;
 
 // Whole words only, so "tea" doesn't match "steakhouse" and "bar" doesn't match "barber".
 const CATEGORY_PATTERNS = Object.fromEntries(
@@ -125,15 +188,16 @@ const CATEGORY_PATTERNS = Object.fromEntries(
 );
 
 /**
- * Puts a place into 'stay', 'food', 'cafe', 'sight' or 'other' using its tags and name.
- * The category with the most matching tags wins; ties go in the order listed above.
+ * Puts a place into 'stay', 'food', 'cafe', 'culture', 'sight' or 'other' using its tags and name.
+ * The category with the most matches wins (the name counts double); ties go in the order listed above.
  */
 export function categorize(tags, name = '') {
-  const texts = [...tags, name].map((t) => String(t).replace(/[_:]/g, ' '));
+  const clean = (t) => String(t).replace(/[_:]/g, ' ');
+  const texts = [...tags.map((t) => [clean(t), 1]), [clean(name), NAME_WEIGHT]];
   let best = 'other';
   let bestHits = 0;
   for (const [category, patterns] of Object.entries(CATEGORY_PATTERNS)) {
-    const hits = texts.filter((text) => patterns.some((re) => re.test(text))).length;
+    const hits = texts.reduce((sum, [text, weight]) => sum + (patterns.some((re) => re.test(text)) ? weight : 0), 0);
     if (hits > bestHits) {
       best = category;
       bestHits = hits;
@@ -215,7 +279,8 @@ export async function findTastePlaces({ tastes, center, radiusKm, take = 40 }, {
   const places = parseInsightPlaces(json).sort((a, b) => b.affinity - a.affinity);
   // Qloo silently ignores invalid parameters, so log enough to spot an empty or far-away result.
   const nearby = places.filter((p) => haversineKm(center, p) <= radiusKm).length;
-  console.info(`Qloo insights: ${places.length} places, ${nearby} within ${Math.round(radiusKm)} km of ${center.label ?? 'start'}`);
+  const top = places.slice(0, 5).map((p) => p.affinity.toFixed(3)).join(', ');
+  console.info(`Qloo insights: ${places.length} places, ${nearby} within ${Math.round(radiusKm)} km of ${center.label ?? 'start'}; top affinities: ${top}`);
   return places;
 }
 

@@ -21,7 +21,7 @@ const DISTANCE_WEIGHT = 0.6;
 // Hotels and other places to stay make odd bike stops, so they're skipped unless asked for.
 const DEFAULT_PREFER = { stay: 0 };
 
-// Each extra stop of an already-chosen category is worth this much less, so rides mix cafés, food and sights.
+// Each extra stop of an already-chosen category is worth this much less, so rides mix cafés, food, culture and sights.
 const REPEAT_FACTOR = 0.75;
 
 const roadKm = (a, b) => haversineKm(a, b) * ROAD_FACTOR;
@@ -86,7 +86,7 @@ function round2(x) {
   return Math.round(x * 100) / 100;
 }
 
-const CATEGORY_LABEL = { cafe: 'Café', food: 'Food', sight: 'Sight', stay: 'Stay', other: 'Stop' };
+const CATEGORY_LABEL = { cafe: 'Café', food: 'Food', culture: 'Culture', sight: 'Sight', stay: 'Stay', other: 'Stop' };
 
 /** A reason built only from the data, used until (or unless) the agent writes a better one. */
 function listNames(tastes) {
