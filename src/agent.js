@@ -16,6 +16,8 @@ How you work:
 3. Then call show_ride once with one short "why" per stop (one sentence, under 25 words) and a two-sentence summary.
 4. Finally reply in 2-4 short sentences. The map and stop cards already show the details, so don't list every stop again.
 
+If the rider is riding with a friend and mentions the friend's favourites, include them with who: "friend". Stops are then picked to suit both; mention which stops both of you will like (likedBy "both") and keep the friend's tastes in later re-plans.
+
 When the rider asks for changes ("shorter", "end near a lake", "more cafés"), call plan_ride again with updated inputs, then show_ride again.
 
 Ground every claim in tool results. "affinity" is Qloo's estimate (0 to 1) of how much people with the rider's tastes like a place; it does not say which favourite caused the match, so don't claim one did. Don't invent opening hours, prices, menus or facts about a place. You may use the place's tags and category. If dataSource is "demo", tell the rider these are sample places, not live Qloo results. If missingTastes is not empty, mention that Qloo didn't recognise those. If route.source is "estimate", say the distance is approximate.
@@ -45,6 +47,11 @@ const TOOLS = [
                 type: 'string',
                 enum: TASTE_CATEGORIES,
                 description: 'Use "food" for dishes, drinks and cuisines (e.g. "filter coffee", "ramen"); they are matched to Qloo taste tags.',
+              },
+              who: {
+                type: 'string',
+                enum: ['you', 'friend'],
+                description: 'Whose favourite this is. Use "friend" for a friend riding along; default "you".',
               },
             },
             required: ['name'],
@@ -99,16 +106,25 @@ function planForModel(plan) {
     route: { distanceKm: plan.route.distanceKm, durationMin: plan.route.durationMin, source: plan.route.source },
     tastesRecognised: plan.tastes.map((t) => {
       const as = t.kind === 'tag' ? ' (Qloo taste tag)' : '';
-      return t.name === t.query ? `${t.name}${as}` : `${t.query} -> ${t.name}${as}`;
+      const whose = plan.withFriend && t.who === 'friend' ? 'friend: ' : '';
+      return whose + (t.name === t.query ? `${t.name}${as}` : `${t.query} -> ${t.name}${as}`);
     }),
     missingTastes: plan.missingTastes,
     candidatesConsidered: plan.candidatesConsidered,
+    ...(plan.withFriend ? { withFriend: true, friendStats: plan.friendStats } : {}),
     stops: plan.stops.map((s) => ({
       stop_id: s.id,
       order: s.order,
       name: s.name,
       category: s.category,
       affinity: Math.round(s.affinity * 100) / 100,
+      ...(s.likedBy
+        ? {
+            likedBy: s.likedBy,
+            affinityYou: s.affinityYou === null ? null : Math.round(s.affinityYou * 100) / 100,
+            affinityFriend: s.affinityFriend === null ? null : Math.round(s.affinityFriend * 100) / 100,
+          }
+        : {}),
       atKm: s.atKm,
       tags: s.tags,
       address: s.address,
@@ -123,7 +139,7 @@ function asString(x) {
 async function runTool(name, input, session, planDeps) {
   if (name === 'plan_ride') {
     const tastes = (Array.isArray(input.tastes) ? input.tastes : [])
-      .map((t) => ({ name: asString(t?.name).trim(), category: asString(t?.category) }))
+      .map((t) => ({ name: asString(t?.name).trim(), category: asString(t?.category), who: t?.who === 'friend' ? 'friend' : 'you' }))
       .filter((t) => t.name);
     try {
       const plan = await planRide({

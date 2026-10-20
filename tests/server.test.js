@@ -40,6 +40,13 @@ test('POST /api/plan returns a ride from comma-separated tastes', async () => {
   assert.ok(ride.stops.length > 0);
 });
 
+test('POST /api/plan plans for a friend too', async () => {
+  const res = await post('/api/plan', { start: '18.5236,73.841', distanceKm: 12, tastes: 'Spirited Away', friendTastes: 'Coldplay, momos' });
+  const { ride } = await res.json();
+  assert.equal(ride.withFriend, true);
+  assert.deepEqual(ride.tastes.map((t) => t.who), ['you', 'friend', 'friend']);
+});
+
 test('POST /api/plan explains bad input with 422', async () => {
   const res = await post('/api/plan', { start: '18.5,73.8', tastes: '' });
   assert.equal(res.status, 422);

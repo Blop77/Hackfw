@@ -207,6 +207,9 @@ button:disabled { opacity: 0.6; cursor: progress; }
 .examples { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -4px 0 14px; }
 .examples .hint { flex-basis: 100%; font-size: 0.85rem; }
 
+.liked-by { font-weight: 600; color: var(--muted); }
+.liked-by.both { color: var(--accent); }
+
 .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .tags span {
   font-size: 0.75rem;

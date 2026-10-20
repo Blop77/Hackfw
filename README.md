@@ -48,6 +48,8 @@ each stop. It is told to base every claim on the tool data and never invent open
 
 ## Features
 
+- **Ride with a friend**: add what a friend loves and RideTaste asks Qloo for each of you separately, then
+  favours stops you'd *both* enjoy (the geometric mean of your two affinities), showing each rider's match per stop
 - **One-click examples** so first-time visitors (and judges) see a full ride in seconds
 - **"How Qloo picked these stops"**: a panel on every ride that shows which Qloo entities your favourites matched,
   how many places Qloo's Insights API returned, and how the stops were chosen, plus Qloo's tags on each stop

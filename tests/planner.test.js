@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { config } from '../src/config.js';
-import { chooseStops, planRide, PlanError } from '../src/planner.js';
+import { blendForTwo, chooseStops, planRide, PlanError } from '../src/planner.js';
 import { FC_ROAD, offlineFetch } from './helpers.js';
 
 config.qlooApiKey = ''; // demo data
@@ -153,6 +153,65 @@ test('live: if Qloo rejects the tags, food tastes fall back to entity search', a
     const last = fetchImpl.calls.filter((u) => u.pathname === '/v2/insights').at(-1);
     assert.equal(last.searchParams.get('signal.interests.entities'), 'E-coffee');
     assert.equal(last.searchParams.has('signal.interests.tags'), false);
+  } finally {
+    config.qlooApiKey = '';
+  }
+});
+
+// ---------- Riding with a friend ----------
+
+test('blendForTwo ranks places both riders like above one-sided favourites', () => {
+  const at = { lat: FC_ROAD.lat, lon: FC_ROAD.lon };
+  const yours = [{ id: 'shared', affinity: 0.7, ...at }, { id: 'only-you', affinity: 0.95, ...at }];
+  const friends = [{ id: 'shared', affinity: 0.8, ...at }, { id: 'only-friend', affinity: 0.9, ...at }];
+  const blended = blendForTwo(yours, friends);
+  assert.deepEqual(blended.map((p) => [p.id, p.likedBy]), [
+    ['shared', 'both'],
+    ['only-you', 'you'],
+    ['only-friend', 'friend'],
+  ]);
+  assert.equal(blended[0].affinity.toFixed(3), Math.sqrt(0.7 * 0.8).toFixed(3));
+  assert.equal(blended[1].affinity, 0.95 * 0.5);
+  assert.equal(blended[1].affinityFriend, null);
+});
+
+test('planRide with a friend (demo data) explains each stop for both riders', async () => {
+  const ride = await planRide(
+    {
+      start: FC_ROAD,
+      distanceKm: 15,
+      tastes: [{ name: 'Spirited Away' }, { name: 'coffee', who: 'friend' }],
+    },
+    { fetchImpl: offlineFetch },
+  );
+  assert.equal(ride.withFriend, true);
+  assert.deepEqual(ride.tastes.map((t) => [t.query, t.who]), [['Spirited Away', 'you'], ['coffee', 'friend']]);
+  assert.ok(ride.friendStats.both > 0);
+  for (const s of ride.stops) {
+    assert.equal(s.likedBy, 'both'); // demo data has the same places for everyone
+    assert.match(s.why, /for you \(Spirited Away\) and \d+% for your friend \(coffee\)/);
+  }
+});
+
+test('planRide needs at least one taste of your own, and works solo without a friend', async () => {
+  await assert.rejects(planRide({ start: FC_ROAD, tastes: [{ name: 'coffee', who: 'friend' }] }), /at least one/);
+  const solo = await planRide({ start: FC_ROAD, tastes: [{ name: 'coffee' }] }, { fetchImpl: offlineFetch });
+  assert.equal(solo.withFriend, false);
+  assert.equal(solo.friendStats, null);
+  assert.ok(solo.stops.every((s) => !s.likedBy));
+});
+
+test('live: each rider gets their own Qloo insights request', async () => {
+  config.qlooApiKey = 'test-key';
+  try {
+    const fetchImpl = liveFetch();
+    const ride = await planRide(
+      { start: FC_ROAD, distanceKm: 8, tastes: [{ name: 'Spirited Away' }, { name: 'Coldplay', who: 'friend' }] },
+      { fetchImpl },
+    );
+    const insights = fetchImpl.calls.filter((u) => u.pathname === '/v2/insights').map((u) => u.searchParams.get('signal.interests.entities'));
+    assert.deepEqual(insights.sort(), ['E-Coldplay', 'E-Spirited Away']);
+    assert.equal(ride.stops[0].likedBy, 'both');
   } finally {
     config.qlooApiKey = '';
   }

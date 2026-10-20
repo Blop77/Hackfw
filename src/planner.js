@@ -89,12 +89,24 @@ function round2(x) {
 const CATEGORY_LABEL = { cafe: 'Café', food: 'Food', sight: 'Sight', stay: 'Stay', other: 'Stop' };
 
 /** A reason built only from the data, used until (or unless) the agent writes a better one. */
-export function defaultReason(stop, tastes) {
+function listNames(tastes) {
   const names = tastes.map((t) => t.name);
-  const who = names.length > 2 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names.join(' and ');
-  const pct = Math.round(stop.affinity * 100);
+  return names.length > 2 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names.join(' and ');
+}
+
+export function defaultReason(stop, tastes) {
   const source = stop.source === 'demo' ? 'Sample affinity' : 'Qloo affinity';
-  return `${source} ${pct}% for people who like ${who}.`;
+  const pct = (x) => Math.round(x * 100);
+  if (!stop.likedBy) return `${source} ${pct(stop.affinity)}% for people who like ${listNames(tastes)}.`;
+
+  const yours = listNames(tastes.filter((t) => t.who !== 'friend'));
+  const friends = listNames(tastes.filter((t) => t.who === 'friend'));
+  if (stop.likedBy === 'both') {
+    return `${source} ${pct(stop.affinityYou)}% for you (${yours}) and ${pct(stop.affinityFriend)}% for your friend (${friends}).`;
+  }
+  return stop.likedBy === 'you'
+    ? `${source} ${pct(stop.affinityYou)}% for you (${yours}); it wasn't in your friend's Qloo results.`
+    : `${source} ${pct(stop.affinityFriend)}% for your friend (${friends}); it wasn't in your Qloo results.`;
 }
 
 /** One favourite -> a Qloo tag (for food) or entity, or the reason it wasn't found. */
@@ -124,6 +136,56 @@ function foundTastes(lookups) {
     }));
 }
 
+/**
+ * One rider's tastes -> Qloo tags/entities -> places they'd like.
+ * If food tags fail or find nothing, those foods are looked up as ordinary entities instead.
+ */
+async function placesForRider(tastes, { center, radiusKm }, deps) {
+  let lookups = await Promise.all(tastes.map((t) => lookUpTaste(t, deps)));
+  let found = foundTastes(lookups);
+  if (!found.length) return { lookups, found, candidates: [] };
+
+  const ask = () => findTastePlaces({ tastes: found, center, radiusKm, take: 50 }, deps);
+  const usesTags = () => found.some((t) => t.kind === 'tag');
+  let candidates = await ask().catch((err) => {
+    if (!usesTags()) throw err;
+    console.warn(`Qloo insights with food tags failed (${err.message}); retrying without tags`);
+    return null;
+  });
+  if (!candidates?.length && usesTags()) {
+    lookups = await Promise.all(lookups.map((l) => (l.entity?.kind === 'tag' ? lookUpTaste({ name: l.query }, deps) : l)));
+    found = foundTastes(lookups);
+    candidates = found.length ? await ask() : [];
+  }
+  return { lookups, found, candidates };
+}
+
+// A place Qloo returned for only one of the two riders gets half credit.
+const ONE_SIDED_FACTOR = 0.5;
+
+/**
+ * Merges two riders' Qloo results. A place both of them like scores the geometric mean of
+ * their affinities, which stays high only when it's a good match for both.
+ */
+export function blendForTwo(yours, friends) {
+  const byId = new Map(yours.map((p) => [p.id, { ...p, affinityYou: p.affinity, affinityFriend: null }]));
+  for (const p of friends) {
+    const mine = byId.get(p.id);
+    if (mine) mine.affinityFriend = p.affinity;
+    else byId.set(p.id, { ...p, affinityYou: null, affinityFriend: p.affinity });
+  }
+  return [...byId.values()]
+    .map((p) => {
+      const both = p.affinityYou !== null && p.affinityFriend !== null;
+      return {
+        ...p,
+        affinity: both ? Math.sqrt(p.affinityYou * p.affinityFriend) : (p.affinityYou ?? p.affinityFriend) * ONE_SIDED_FACTOR,
+        likedBy: both ? 'both' : p.affinityYou !== null ? 'you' : 'friend',
+      };
+    })
+    .sort((a, b) => b.affinity - a.affinity);
+}
+
 async function resolvePoint(where, label, deps) {
   if (where && typeof where === 'object' && Number.isFinite(where.lat) && Number.isFinite(where.lon)) return where;
   const point = await geocode(String(where ?? ''), deps);
@@ -132,7 +194,8 @@ async function resolvePoint(where, label, deps) {
 }
 
 /**
- * Full pipeline. `tastes` is a list of {name, category?}, e.g. {name: 'Studio Ghibli', category: 'movie'}.
+ * Full pipeline. `tastes` is a list of {name, category?, who?}, e.g. {name: 'Studio Ghibli', category: 'movie'}.
+ * Tastes with who: 'friend' belong to a friend riding along; stops are then picked for both riders.
  * `start` / `end` are place names or {lat, lon}. Leave `end` empty for a loop back to the start.
  * `deps.fetchImpl` replaces fetch for every network call (used by tests).
  */
@@ -145,31 +208,33 @@ export async function planRide({ start, end, distanceKm = 15, tastes = [], prefe
   const loop = !end || String(end).trim() === '';
   const endPt = loop ? startPt : await resolvePoint(end, 'finish', deps);
 
-  let lookups = await Promise.all(tastes.map((t) => lookUpTaste(t, deps)));
-  let found = foundTastes(lookups);
-  const missing = lookups.filter((l) => !l.entity).map((l) => l.query);
-  if (!found.length) {
-    const reason = lookups.find((l) => l.error)?.error;
-    throw new PlanError(`Qloo didn't recognise any of: ${missing.join(', ')}.${reason ? ` (${reason})` : ''}`);
-  }
+  const yourTastes = tastes.filter((t) => t.who !== 'friend');
+  const friendTastes = tastes.filter((t) => t.who === 'friend');
+  if (!yourTastes.length) throw new PlanError('Tell me at least one film, artist, food or place you love.');
 
   // Search a circle that covers everywhere the ride could reach.
   const center = loop ? startPt : { lat: (startPt.lat + endPt.lat) / 2, lon: (startPt.lon + endPt.lon) / 2 };
   const radiusKm = loop ? distanceKm / 2 : Math.max(distanceKm / 2, haversineKm(startPt, endPt) / 2 + 2);
-  let candidates = await findTastePlaces({ tastes: found, center, radiusKm, take: 50 }, deps).catch((err) => {
-    if (!found.some((t) => t.kind === 'tag')) throw err;
-    console.warn(`Qloo insights with food tags failed (${err.message}); retrying without tags`);
-    return null;
-  });
-  // If food tags didn't work out, look those foods up as ordinary entities, as before tags existed.
-  if (!candidates?.length && found.some((t) => t.kind === 'tag')) {
-    lookups = await Promise.all(
-      lookups.map((l) => (l.entity?.kind === 'tag' ? lookUpTaste({ name: l.query }, deps) : l)),
-    );
-    found = foundTastes(lookups);
-    if (!found.length) throw new PlanError(`Qloo didn't recognise any of: ${tastes.map((t) => t.name).join(', ')}.`);
-    candidates = await findTastePlaces({ tastes: found, center, radiusKm, take: 50 }, deps);
+  const area = { center, radiusKm };
+
+  // Riding with a friend: ask Qloo separately for each rider, then favour places both of them like.
+  const [you, friend] = await Promise.all([
+    placesForRider(yourTastes, area, deps),
+    friendTastes.length ? placesForRider(friendTastes, area, deps) : null,
+  ]);
+  const riders = [you, friend].filter(Boolean);
+  if (!riders.some((r) => r.found.length)) {
+    const lookups = riders.flatMap((r) => r.lookups);
+    const reason = lookups.find((l) => l.error)?.error;
+    throw new PlanError(`Qloo didn't recognise any of: ${lookups.map((l) => l.query).join(', ')}.${reason ? ` (${reason})` : ''}`);
   }
+  const withFriend = Boolean(you.found.length && friend?.found.length);
+  const candidates = withFriend ? blendForTwo(you.candidates, friend.candidates) : (you.found.length ? you : friend).candidates;
+  const found = [
+    ...you.found.map((t) => ({ ...t, who: 'you' })),
+    ...(friend?.found ?? []).map((t) => ({ ...t, who: 'friend' })),
+  ];
+  const missingTastes = riders.flatMap((r) => r.lookups.filter((l) => !l.entity).map((l) => l.query));
 
   const { stops } = chooseStops({ start: startPt, end: endPt, candidates, distanceKm, maxStops, prefer });
   const route = await routeBike([startPt, ...stops, endPt], deps);
@@ -187,8 +252,12 @@ export async function planRide({ start, end, distanceKm = 15, tastes = [], prefe
     })),
     route: { geometry: route.geometry, distanceKm: route.distanceKm, durationMin: route.durationMin, source: route.source },
     tastes: found,
-    missingTastes: lookups.filter((l) => !l.entity).map((l) => l.query),
+    missingTastes,
     candidatesConsidered: candidates.length,
+    withFriend,
+    friendStats: withFriend
+      ? { you: you.candidates.length, friend: friend.candidates.length, both: candidates.filter((c) => c.likedBy === 'both').length }
+      : null,
     searchRadiusKm: round1(radiusKm),
     dataSource: qlooIsLive() ? 'qloo' : 'demo',
   };

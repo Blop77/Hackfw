@@ -102,7 +102,7 @@ export function createApp({ agent, planDeps } = {}) {
           start: body.start,
           end: body.end,
           distanceKm: body.distanceKm,
-          tastes: parseTastes(body.tastes),
+          tastes: [...parseTastes(body.tastes), ...parseTastes(body.friendTastes).map((t) => ({ ...t, who: 'friend' }))],
           maxStops: body.maxStops,
         }, planDeps);
         return sendJson(res, 200, { ride });
