@@ -48,22 +48,21 @@
       </form>
 
       <div id="chat" class="card chat" hidden>
-        <h2>Chat with your ride buddy</h2>
+        <h2 id="chat-title">Chat with your ride buddy</h2>
+        <p id="no-agent" class="note" hidden>
+          The AI chat is off right now. The buttons below and the form above still plan with Qloo.
+        </p>
         <ol id="messages" class="messages" aria-live="polite"></ol>
         <form id="chat-form" class="chat-form">
           <input id="chat-input" placeholder="e.g. Shorter, and end near a lake" autocomplete="off" aria-label="Message">
           <button type="submit">Send</button>
         </form>
         <div class="suggestions">
-          <button type="button" class="chip" data-say="Make it shorter">Shorter</button>
-          <button type="button" class="chip" data-say="More food stops, less sightseeing">More food</button>
-          <button type="button" class="chip" data-say="Only cafés please">Only cafés</button>
+          <button type="button" class="chip" data-tweak="shorter" data-say="Make it shorter">Shorter</button>
+          <button type="button" class="chip" data-tweak="food" data-say="More food stops, less sightseeing">More food</button>
+          <button type="button" class="chip" data-tweak="cafes" data-say="Only cafés please">Only cafés</button>
         </div>
       </div>
-
-      <p id="no-agent" class="note" hidden>
-        The AI chat is off right now. The quick plan above still works, and Qloo still picks every stop.
-      </p>
     </section>
 
     <section class="results" aria-label="Your ride">

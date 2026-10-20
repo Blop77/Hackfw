@@ -34,14 +34,14 @@ RideTaste is an AI agent that plans bike rides around your taste.
 
 ## How I built it
 - **Qloo Insights API:** `/search` resolves each favourite to a Qloo entity, and `/v2/insights` with `filter.type=urn:entity:place`, `signal.interests.entities` and `filter.location` returns nearby places with an affinity score. Qloo is the core of the app: without it there's no link from "I love Spirited Away" to "this café".
-- **Agent:** Claude (Anthropic API) with two tools. `plan_ride` runs the pipeline and `show_ride` writes a grounded one-line reason for each stop. The system prompt tells it to use only tool data, never invent opening hours or prices, and say when data is sample or approximate. If Claude is ever unavailable, the app falls back to the same planner without the chat, so Qloo still picks every stop.
+- **Agent:** Claude (Anthropic API) with two tools. `plan_ride` runs the pipeline and `show_ride` writes a grounded one-line reason for each stop. The system prompt tells it to use only tool data, never invent opening hours or prices, and say when data is sample or approximate. If Claude is ever unavailable, the app falls back to the same planner without the chat, and the Shorter, More food and Only cafés buttons still re-plan the ride, so Qloo still picks every stop.
 - **Choosing stops:** a greedy planner inserts each stop at its cheapest point in the ride and scores candidates by taste and distance fit:
 
 $$\text{score} = \text{affinity} \times \text{preference} \times 0.75^{\text{repeats}} - \lambda \cdot \Delta\lvert L - T \rvert$$
 
 where *L* is the current ride length, *T* the requested distance and \\( \lambda = 0.6/T \\). While the ride is too short a detour helps; once it's long enough a detour costs. The 0.75 repeat factor mixes cafés, food and sights.
 - **Maps:** OpenStreetMap geocoding (Nominatim), bike routing (OSRM bike profile) and Leaflet.
-- **Stack:** Node.js with no framework, plain HTML/CSS/JS and 57 automated tests (`node --test`).
+- **Stack:** Node.js with no framework, plain HTML/CSS/JS and 58 automated tests (`node --test`).
 
 ## Challenges I ran into
 - **Rides came out far too short.** My first scoring rule just penalised detours, so a 15 km request gave a 5 km ride, because the best-matching places were all close together. Scoring by how much a stop moves the ride *towards the requested distance* fixed it.
@@ -55,7 +55,7 @@ where *L* is the current ride length, *T* the requested distance and \\( \lambda
 - It runs on live Qloo data in Pune, where I ride, and in New York, with real bike routes and "at km X" for every stop.
 - **Ride with a friend** really blends two tastes: a stop only ranks high if Qloo says it suits both of you, and each stop shows both matches (e.g. German Bakery: you 79%, friend 81%).
 - Every recommendation is explainable: the "How Qloo picked these stops" panel shows the Qloo matches, how many places came back and how the stops were chosen.
-- 57 automated tests run in GitHub Actions on Node 20 and 22, and there's a demo mode so anyone can run it without keys.
+- 58 automated tests run in GitHub Actions on Node 20 and 22, and there's a demo mode so anyone can run it without keys.
 
 ## What I learned
 - **How Qloo's taste graph links domains.** A film and a singer can point to a café. The affinity score says how much people with your taste like a place, but not *which* favourite caused it, so the explanations have to stay honest.
