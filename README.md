@@ -4,6 +4,11 @@
 
 **An AI agent that plans bike rides around your taste.**
 
+### 👉 Live demo: **[ridetaste.onrender.com](https://ridetaste.onrender.com)**
+
+Try it in 30 seconds: tap **👯 Ride with a friend · Pune**, then open **"How Qloo picked these stops"** under the map.
+(If the first load is slow, the free server is waking up; give it up to a minute.)
+
 Tell it the films, music and food you love, where you're starting and how far you want to ride.
 RideTaste asks **Qloo's Taste AI** which cafés, food spots and sights people with your taste enjoy,
 picks the best stops that fit your distance, draws the route on a map and explains why each stop suits you.
