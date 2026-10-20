@@ -9,15 +9,14 @@ import { config, qlooIsLive } from './config.js';
 import { DEMO_CENTER, DEMO_PLACES, demoAffinity } from './demo-data.js';
 import { haversineKm } from './geo.js';
 
-// What the user can say they like, mapped to Qloo entity types.
+// What the user can say they like, mapped to the entity types in Qloo's hackathon guide.
 export const TASTE_TYPES = {
   artist: 'urn:entity:artist',
-  album: 'urn:entity:album',
   movie: 'urn:entity:movie',
   tv_show: 'urn:entity:tv_show',
   book: 'urn:entity:book',
   podcast: 'urn:entity:podcast',
-  videogame: 'urn:entity:videogame',
+  video_game: 'urn:entity:video_game',
   brand: 'urn:entity:brand',
   person: 'urn:entity:person',
   place: 'urn:entity:place',
@@ -150,7 +149,11 @@ export async function findTastePlaces({ tastes, center, radiusKm, take = 40 }, {
     },
     fetchImpl,
   );
-  return parseInsightPlaces(json).sort((a, b) => b.affinity - a.affinity);
+  const places = parseInsightPlaces(json).sort((a, b) => b.affinity - a.affinity);
+  // Qloo silently ignores invalid parameters, so log enough to spot an empty or far-away result.
+  const nearby = places.filter((p) => haversineKm(center, p) <= radiusKm).length;
+  console.info(`Qloo insights: ${places.length} places, ${nearby} within ${Math.round(radiusKm)} km of ${center.label ?? 'start'}`);
+  return places;
 }
 
 function demoPlaces({ tastes, center, radiusKm }) {
