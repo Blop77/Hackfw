@@ -18,8 +18,8 @@ const DISTANCE_SLACK = 1.15;
 // (towards or away from it) is worth this much affinity.
 const DISTANCE_WEIGHT = 0.6;
 
-// Hotels, and whole districts or cities, make odd bike stops, so they're skipped unless asked for.
-const DEFAULT_PREFER = { stay: 0, area: 0 };
+// Hotels, whole districts and errands (shops, services) make odd bike stops, so they're skipped unless asked for.
+const DEFAULT_PREFER = { stay: 0, area: 0, errand: 0 };
 
 // Each extra stop of an already-chosen category is worth this much less, so rides mix cafés, food, culture and sights.
 const REPEAT_FACTOR = 0.75;
