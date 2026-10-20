@@ -29,7 +29,8 @@ RideTaste is an AI agent that plans bike rides around your taste.
 2. The agent turns your favourites into Qloo entities and asks **Qloo's Taste AI** for places near you that people with your taste enjoy.
 3. It picks 1–6 stops that fit your distance, routes the ride for a bike, and shows it on a map with a short reason for each stop.
 4. You can change it: "shorter", "more food, less sightseeing", "end near a lake".
-5. You can download the ride as **GPX** for Strava, Komoot or a bike computer.
+5. **Ride with a friend:** add what your friend loves, and RideTaste asks Qloo for each of you separately, then picks stops you'd *both* enjoy, showing each rider's match on every stop.
+6. You can download the ride as **GPX** for Strava, Komoot or a bike computer.
 
 ## How I built it
 - **Qloo Insights API:** `/search` resolves each favourite to a Qloo entity, and `/v2/insights` with `filter.type=urn:entity:place`, `signal.interests.entities` and `filter.location` returns nearby places with an affinity score. Qloo is the core of the app: without it there's no link from "I love Spirited Away" to "this café".
@@ -65,7 +66,7 @@ where *L* is the current ride length, *T* the requested distance and \\( \lambda
 ```markdown
 ## Try it in 30 seconds
 1. Open the live demo: <RENDER URL>. If the first load is slow, the free server is waking up; give it up to a minute.
-2. Click one of the **"Try one"** examples (e.g. *Ghibli & filter coffee · Pune*). The agent plans a ride with Qloo.
+2. Click one of the **"Try one"** examples (e.g. *Ghibli & filter coffee · Pune*, or *Ride with a friend · Pune*). The agent plans a ride with Qloo.
 3. Open **"How Qloo picked these stops"** under the map to see the Qloo entities, the places Qloo returned, and how the stops were chosen.
 4. In the chat, tap **More food** or type *"make it shorter and end near a lake"* to watch the agent re-plan.
 5. Click **Download GPX** to take the ride into Strava, Komoot or a bike computer.

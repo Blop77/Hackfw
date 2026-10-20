@@ -93,9 +93,9 @@ function stopCard(s) {
         <h3>${escapeHtml(s.name)}</h3>
         <div class="meta">
           <span>${CATEGORY[s.category] ?? CATEGORY.other}</span>
-          <span class="affinity" title="How much people with your taste like this place">
+          ${s.likedBy ? friendMatch(s) : `<span class="affinity" title="How much people with your taste like this place">
             <span class="affinity-bar"><span style="width:${pct}%"></span></span>${pct}% match
-          </span>
+          </span>`}
           <span>at km ${s.atKm}</span>
         </div>
         <p class="why">${escapeHtml(s.why)}</p>
@@ -105,6 +105,14 @@ function stopCard(s) {
         </div>
       </div>
     </li>`;
+}
+
+/** Match scores for each rider when riding with a friend. */
+function friendMatch(s) {
+  const pct = (x) => (x === null || x === undefined ? '–' : `${Math.round(x * 100)}%`);
+  const label = { both: '👯 Both of you', you: 'Mostly you', friend: 'Mostly your friend' }[s.likedBy];
+  return `<span class="liked-by ${s.likedBy}">${label}</span>
+    <span title="Qloo affinity for each rider">you ${pct(s.affinityYou)} · friend ${pct(s.affinityFriend)}</span>`;
 }
 
 // Qloo tags can be names ("Coffee Shop") or ids ("urn:tag:category:place:coffee_shop").
@@ -132,22 +140,32 @@ function renderHowQloo(ride) {
   const panel = $('how-qloo');
   panel.hidden = false;
   const demo = ride.dataSource === 'demo';
-  const tastes = ride.tastes
+  const describe = (list) => list
     .map((t) => {
       const type = TYPE_LABEL[t.type] ? ` <span class="hint">(${TYPE_LABEL[t.type]})</span>` : '';
       const renamed = t.name !== t.query ? ` <span class="hint">for "${escapeHtml(t.query)}"</span>` : '';
       return `<strong>${escapeHtml(t.name)}</strong>${type}${renamed}`;
     })
     .join(' · ');
+  const tastes = ride.withFriend
+    ? `<br>You: ${describe(ride.tastes.filter((t) => t.who !== 'friend'))}<br>Your friend: ${describe(ride.tastes.filter((t) => t.who === 'friend'))}`
+    : describe(ride.tastes);
+  const f = ride.friendStats;
+  const places = ride.withFriend
+    ? `It ran once for each of you: <strong>${f.you}</strong> places for you, <strong>${f.friend}</strong> for your friend,
+      and <strong>${f.both}</strong> that appeared for both. Each comes with an affinity score per rider.`
+    : `It returned <strong>${ride.candidatesConsidered}</strong>, each with an affinity score (the "% match" on each stop).`;
+  const pick = ride.withFriend
+    ? `places you'd <em>both</em> enjoy (Qloo affinities combined, so a stop only scores high if it suits both of you)`
+    : 'Qloo affinity';
   const missing = ride.missingTastes?.length ? ` Qloo didn't find: ${escapeHtml(ride.missingTastes.join(', '))}.` : '';
   $('how-qloo-demo').hidden = !demo;
   $('how-qloo-steps').innerHTML = `
     <li><strong>Your taste → Qloo's taste graph.</strong> Qloo's Search and Tags APIs matched your favourites: ${tastes}.${missing}</li>
     <li><strong>Taste → places.</strong> Qloo's Insights API looked within ${ride.searchRadiusKm} km of ${escapeHtml(ride.start.label)}
-      for places that people with this taste enjoy. It returned <strong>${ride.candidatesConsidered}</strong>, each with an affinity score
-      (the "% match" on each stop).</li>
+      for places that people with this taste enjoy. ${places}</li>
     <li><strong>Places → your ride.</strong> RideTaste picked the ${ride.stops.length} stop${ride.stops.length === 1 ? '' : 's'} with the best mix of
-      Qloo affinity, variety (cafés, food, sights) and fit to your ${ride.requestedKm} km, then routed it by bike.</li>`;
+      ${pick}, variety (cafés, food, sights) and fit to your ${ride.requestedKm} km, then routed it by bike.</li>`;
 }
 
 function formatDuration(min) {
@@ -223,6 +241,7 @@ const EXAMPLES = [
   { start: 'FC Road, Pune', distanceKm: 12, tastes: 'Spirited Away, Studio Ghibli, filter coffee' },
   { start: 'Koregaon Park, Pune', distanceKm: 15, tastes: 'Prateek Kuhad, The Local Train, misal pav' },
   { start: 'Washington Square Park, New York', distanceKm: 15, tastes: 'The Grand Budapest Hotel, Vampire Weekend, bagels' },
+  { start: 'FC Road, Pune', distanceKm: 15, tastes: 'Spirited Away, Prateek Kuhad, filter coffee', friendTastes: 'Coldplay, Harry Potter, momos' },
 ];
 
 for (const button of document.querySelectorAll('[data-example]')) {
@@ -232,6 +251,7 @@ for (const button of document.querySelectorAll('[data-example]')) {
     $('distance').value = ex.distanceKm;
     $('distance-out').value = ex.distanceKm;
     $('tastes').value = ex.tastes;
+    $('friend-tastes').value = ex.friendTastes ?? '';
     $('plan-form').requestSubmit();
   });
 }
@@ -241,15 +261,17 @@ $('plan-form').addEventListener('submit', async (e) => {
   const start = $('start').value.trim();
   const distanceKm = Number($('distance').value);
   const tastes = $('tastes').value.trim();
+  const friendTastes = $('friend-tastes').value.trim();
 
   if (state.agent) {
-    sendChat(`I'm starting from ${start} and want to ride about ${distanceKm} km. Things I love: ${tastes}.`);
+    const friend = friendTastes ? ` I'm riding with a friend who loves: ${friendTastes}.` : '';
+    sendChat(`I'm starting from ${start} and want to ride about ${distanceKm} km. Things I love: ${tastes}.${friend}`);
     return;
   }
 
   setBusy(true);
   try {
-    const { ride } = await postJson('/api/plan', { start, distanceKm, tastes });
+    const { ride } = await postJson('/api/plan', { start, distanceKm, tastes, friendTastes });
     showResults(ride);
   } catch (err) {
     $('empty').hidden = false;
