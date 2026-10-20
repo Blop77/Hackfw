@@ -2,7 +2,7 @@
 
 import { qlooIsLive } from './config.js';
 import { geocode, haversineKm, routeBike, round1, ROAD_FACTOR } from './geo.js';
-import { findTasteEntity, findTastePlaces } from './qloo.js';
+import { FOOD_CATEGORY, findTasteEntity, findTastePlaces, findTasteTag } from './qloo.js';
 
 export class PlanError extends Error {
   constructor(message) {
@@ -97,6 +97,33 @@ export function defaultReason(stop, tastes) {
   return `${source} ${pct}% for people who like ${who}.`;
 }
 
+/** One favourite -> a Qloo tag (for food) or entity, or the reason it wasn't found. */
+async function lookUpTaste(taste, deps) {
+  try {
+    if (taste.category === FOOD_CATEGORY) {
+      const tag = await findTasteTag(taste.name, deps).catch(() => null);
+      if (tag) return { query: taste.name, entity: { ...tag, kind: 'tag' } };
+    }
+    const category = taste.category === FOOD_CATEGORY ? undefined : taste.category;
+    const entity = await findTasteEntity(taste.name, category, deps);
+    return { query: taste.name, entity: entity && { ...entity, kind: 'entity' } };
+  } catch (err) {
+    return { query: taste.name, error: err.message };
+  }
+}
+
+function foundTastes(lookups) {
+  return lookups
+    .filter((l) => l.entity)
+    .map((l) => ({
+      id: l.entity.id,
+      name: l.entity.name,
+      query: l.query,
+      kind: l.entity.kind,
+      type: l.entity.kind === 'tag' ? 'tag' : l.entity.types?.[0] ?? null,
+    }));
+}
+
 async function resolvePoint(where, label, deps) {
   if (where && typeof where === 'object' && Number.isFinite(where.lat) && Number.isFinite(where.lon)) return where;
   const point = await geocode(String(where ?? ''), deps);
@@ -118,18 +145,8 @@ export async function planRide({ start, end, distanceKm = 15, tastes = [], prefe
   const loop = !end || String(end).trim() === '';
   const endPt = loop ? startPt : await resolvePoint(end, 'finish', deps);
 
-  const lookups = await Promise.all(
-    tastes.map(async (t) => {
-      try {
-        return { query: t.name, entity: await findTasteEntity(t.name, t.category, deps) };
-      } catch (err) {
-        return { query: t.name, error: err.message };
-      }
-    }),
-  );
-  const found = lookups
-    .filter((l) => l.entity)
-    .map((l) => ({ id: l.entity.id, name: l.entity.name, query: l.query, type: l.entity.types?.[0] ?? null }));
+  let lookups = await Promise.all(tastes.map((t) => lookUpTaste(t, deps)));
+  let found = foundTastes(lookups);
   const missing = lookups.filter((l) => !l.entity).map((l) => l.query);
   if (!found.length) {
     const reason = lookups.find((l) => l.error)?.error;
@@ -139,7 +156,20 @@ export async function planRide({ start, end, distanceKm = 15, tastes = [], prefe
   // Search a circle that covers everywhere the ride could reach.
   const center = loop ? startPt : { lat: (startPt.lat + endPt.lat) / 2, lon: (startPt.lon + endPt.lon) / 2 };
   const radiusKm = loop ? distanceKm / 2 : Math.max(distanceKm / 2, haversineKm(startPt, endPt) / 2 + 2);
-  const candidates = await findTastePlaces({ tastes: found, center, radiusKm, take: 50 }, deps);
+  let candidates = await findTastePlaces({ tastes: found, center, radiusKm, take: 50 }, deps).catch((err) => {
+    if (!found.some((t) => t.kind === 'tag')) throw err;
+    console.warn(`Qloo insights with food tags failed (${err.message}); retrying without tags`);
+    return null;
+  });
+  // If food tags didn't work out, look those foods up as ordinary entities, as before tags existed.
+  if (!candidates?.length && found.some((t) => t.kind === 'tag')) {
+    lookups = await Promise.all(
+      lookups.map((l) => (l.entity?.kind === 'tag' ? lookUpTaste({ name: l.query }, deps) : l)),
+    );
+    found = foundTastes(lookups);
+    if (!found.length) throw new PlanError(`Qloo didn't recognise any of: ${tastes.map((t) => t.name).join(', ')}.`);
+    candidates = await findTastePlaces({ tastes: found, center, radiusKm, take: 50 }, deps);
+  }
 
   const { stops } = chooseStops({ start: startPt, end: endPt, candidates, distanceKm, maxStops, prefer });
   const route = await routeBike([startPt, ...stops, endPt], deps);
@@ -157,7 +187,7 @@ export async function planRide({ start, end, distanceKm = 15, tastes = [], prefe
     })),
     route: { geometry: route.geometry, distanceKm: route.distanceKm, durationMin: route.durationMin, source: route.source },
     tastes: found,
-    missingTastes: missing,
+    missingTastes: lookups.filter((l) => !l.entity).map((l) => l.query),
     candidatesConsidered: candidates.length,
     searchRadiusKm: round1(radiusKm),
     dataSource: qlooIsLive() ? 'qloo' : 'demo',

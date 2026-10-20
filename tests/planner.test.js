@@ -107,3 +107,53 @@ test('planRide explains what went wrong', async () => {
     /Couldn't find the start "Nowhere-ville"/,
   );
 });
+
+// ---------- Live-mode pipeline with a fake Qloo ----------
+
+const liveFetch = ({ tagsWork = true } = {}) => {
+  const calls = [];
+  const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  const fn = async (url) => {
+    const u = new URL(String(url));
+    calls.push(u);
+    if (u.pathname === '/v2/tags') return json({ results: { tags: [{ id: 'urn:tag:category:place:coffee_shop', name: 'Coffee Shop' }] } });
+    if (u.pathname === '/search') return json({ results: [{ entity_id: `E-${u.searchParams.get('query')}`, name: u.searchParams.get('query'), types: ['urn:entity:place'] }] });
+    if (u.pathname === '/v2/insights') {
+      if (!tagsWork && u.searchParams.has('signal.interests.tags')) return json({ error: 'at least one valid signal or filter is required' }, 400);
+      return json({ results: { entities: [{ entity_id: 'P1', name: 'Bean There', location: { lat: FC_ROAD.lat + 0.01, lon: FC_ROAD.lon }, query: { affinity: 0.8 }, tags: [{ name: 'Cafe' }] }] } });
+    }
+    throw new Error('offline (test)'); // routing etc.
+  };
+  fn.calls = calls;
+  return fn;
+};
+
+test('live: food tastes become Qloo tags in the insights request', async () => {
+  config.qlooApiKey = 'test-key';
+  try {
+    const fetchImpl = liveFetch();
+    const ride = await planRide({ start: FC_ROAD, distanceKm: 8, tastes: [{ name: 'Spirited Away', category: 'movie' }, { name: 'coffee', category: 'food' }] }, { fetchImpl });
+    const insights = fetchImpl.calls.find((u) => u.pathname === '/v2/insights');
+    assert.equal(insights.searchParams.get('signal.interests.tags'), 'urn:tag:category:place:coffee_shop');
+    assert.equal(insights.searchParams.get('signal.interests.entities'), 'E-Spirited Away');
+    assert.deepEqual(ride.tastes.map((t) => [t.query, t.kind]), [['Spirited Away', 'entity'], ['coffee', 'tag']]);
+    assert.equal(ride.stops[0].name, 'Bean There');
+  } finally {
+    config.qlooApiKey = '';
+  }
+});
+
+test('live: if Qloo rejects the tags, food tastes fall back to entity search', async () => {
+  config.qlooApiKey = 'test-key';
+  try {
+    const fetchImpl = liveFetch({ tagsWork: false });
+    const ride = await planRide({ start: FC_ROAD, distanceKm: 8, tastes: [{ name: 'coffee', category: 'food' }] }, { fetchImpl });
+    assert.deepEqual(ride.tastes.map((t) => [t.query, t.kind]), [['coffee', 'entity']]);
+    assert.equal(ride.stops.length, 1);
+    const last = fetchImpl.calls.filter((u) => u.pathname === '/v2/insights').at(-1);
+    assert.equal(last.searchParams.get('signal.interests.entities'), 'E-coffee');
+    assert.equal(last.searchParams.has('signal.interests.tags'), false);
+  } finally {
+    config.qlooApiKey = '';
+  }
+});
