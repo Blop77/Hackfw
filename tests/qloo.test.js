@@ -3,6 +3,7 @@ import { afterEach, test } from 'node:test';
 import { config } from '../src/config.js';
 import {
   categorize,
+  clearQlooCache,
   findTasteEntity,
   findTastePlaces,
   findTasteTag,
@@ -10,12 +11,16 @@ import {
   parseSearchResults,
   parseTagResults,
   pickFoodTag,
+  qlooTiming,
 } from '../src/qloo.js';
 import { FC_ROAD, fakeFetch } from './helpers.js';
 
 const realKey = config.qlooApiKey;
+qlooTiming.retryBaseMs = 1; // keep retry tests fast
+
 afterEach(() => {
   config.qlooApiKey = realKey;
+  clearQlooCache();
 });
 
 test('parseSearchResults reads entity ids, names and types', () => {
@@ -183,4 +188,54 @@ test('live mode: findTastePlaces sends entities and tags as separate signals', a
   const url = new URL(fetchImpl.calls[0]);
   assert.equal(url.searchParams.get('signal.interests.entities'), 'E1');
   assert.equal(url.searchParams.get('signal.interests.tags'), 'urn:tag:x');
+});
+
+test('live mode: retries when Qloo rate-limits, then succeeds', async () => {
+  config.qlooApiKey = 'test-key';
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    if (calls < 3) return new Response('slow down', { status: 429 });
+    return new Response(JSON.stringify({ results: [{ entity_id: 'E1', name: 'Coldplay', types: ['urn:entity:artist'] }] }));
+  };
+  const e = await findTasteEntity('Coldplay', 'artist', { fetchImpl });
+  assert.equal(e.id, 'E1');
+  assert.equal(calls, 3);
+});
+
+test('live mode: gives up after a few rate-limited retries', async () => {
+  config.qlooApiKey = 'test-key';
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    return new Response('slow down', { status: 429 });
+  };
+  await assert.rejects(findTasteEntity('Coldplay', 'artist', { fetchImpl }), /HTTP 429/);
+  assert.equal(calls, 4); // first try + 3 retries
+});
+
+test('live mode: repeated look-ups are served from the cache', async () => {
+  config.qlooApiKey = 'test-key';
+  const fetchImpl = fakeFetch([['/search', { results: [{ entity_id: 'E1', name: 'Coldplay', types: [] }] }]]);
+  await Promise.all([findTasteEntity('Coldplay', null, { fetchImpl }), findTasteEntity('Coldplay', null, { fetchImpl })]);
+  await findTasteEntity('Coldplay', null, { fetchImpl });
+  assert.equal(fetchImpl.calls.length, 1);
+});
+
+test('live mode: at most two Qloo requests run at once', async () => {
+  config.qlooApiKey = 'test-key';
+  let running = 0;
+  let peak = 0;
+  const fetchImpl = async (url) => {
+    running++;
+    peak = Math.max(peak, running);
+    await new Promise((r) => setTimeout(r, 5));
+    running--;
+    const q = new URL(String(url)).searchParams.get('query');
+    return new Response(JSON.stringify({ results: [{ entity_id: q, name: q, types: [] }] }));
+  };
+  const names = ['a', 'b', 'c', 'd', 'e', 'f'];
+  const found = await Promise.all(names.map((n) => findTasteEntity(n, null, { fetchImpl })));
+  assert.deepEqual(found.map((e) => e.id), names);
+  assert.equal(peak, 2);
 });

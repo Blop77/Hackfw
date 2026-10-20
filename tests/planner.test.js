@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { config } from '../src/config.js';
+import { clearQlooCache } from '../src/qloo.js';
 import { blendForTwo, chooseStops, planRide, PlanError } from '../src/planner.js';
 import { FC_ROAD, offlineFetch } from './helpers.js';
 
@@ -111,6 +112,7 @@ test('planRide explains what went wrong', async () => {
 // ---------- Live-mode pipeline with a fake Qloo ----------
 
 const liveFetch = ({ tagsWork = true } = {}) => {
+  clearQlooCache(); // each live test starts with a cold cache
   const calls = [];
   const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
   const fn = async (url) => {

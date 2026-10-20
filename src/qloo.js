@@ -35,20 +35,79 @@ export class QlooError extends Error {
   }
 }
 
+// Qloo rate-limits bursts, and a friend ride fires many look-ups at once, so requests are
+// throttled, retried on 429/503, and cached (Qloo's hackathon guide allows private server-side caching).
+const MAX_IN_FLIGHT = 2;
+const MAX_RETRIES = 3;
+const CACHE_TTL_MS = { lookup: 12 * 60 * 60 * 1000, insights: 60 * 60 * 1000 };
+const CACHE_MAX_ENTRIES = 500;
+
+export const qlooTiming = { retryBaseMs: 1000, maxRetryMs: 8000 };
+
+const cache = new Map(); // url -> {expires, promise}
+let inFlight = 0;
+const waiting = [];
+
+/** For tests: forget cached responses. */
+export function clearQlooCache() {
+  cache.clear();
+}
+
+async function withSlot(fn) {
+  if (inFlight >= MAX_IN_FLIGHT) await new Promise((resolve) => waiting.push(resolve));
+  inFlight++;
+  try {
+    return await fn();
+  } finally {
+    inFlight--;
+    waiting.shift()?.();
+  }
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function retryDelayMs(res, attempt) {
+  const header = Number(res.headers.get('retry-after'));
+  const ms = Number.isFinite(header) && header > 0 ? header * 1000 : qlooTiming.retryBaseMs * 2 ** attempt;
+  return Math.min(ms, qlooTiming.maxRetryMs);
+}
+
+async function fetchQloo(url, path, fetchImpl) {
+  for (let attempt = 0; ; attempt++) {
+    const res = await withSlot(() =>
+      fetchImpl(url, {
+        headers: { 'X-Api-Key': config.qlooApiKey, Accept: 'application/json' },
+        signal: AbortSignal.timeout(15000),
+      }),
+    );
+    if (res.ok) return res.json();
+    if ((res.status === 429 || res.status === 503) && attempt < MAX_RETRIES) {
+      const wait = retryDelayMs(res, attempt);
+      console.warn(`Qloo ${path} returned HTTP ${res.status}; retrying in ${wait} ms`);
+      await sleep(wait);
+      continue;
+    }
+    const body = await res.text().catch(() => '');
+    throw new QlooError(`Qloo ${path} returned HTTP ${res.status}: ${body.slice(0, 300)}`, res.status);
+  }
+}
+
 async function qlooGet(path, params, fetchImpl) {
   const url = new URL(config.qlooBaseUrl + path);
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
   }
-  const res = await fetchImpl(url, {
-    headers: { 'X-Api-Key': config.qlooApiKey, Accept: 'application/json' },
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new QlooError(`Qloo ${path} returned HTTP ${res.status}: ${body.slice(0, 300)}`, res.status);
-  }
-  return res.json();
+  const key = url.toString();
+  const hit = cache.get(key);
+  if (hit && hit.expires > Date.now()) return hit.promise;
+
+  // Cache the promise, so identical requests made at the same time share one call.
+  const promise = fetchQloo(url, path, fetchImpl);
+  const ttl = path === '/v2/insights' ? CACHE_TTL_MS.insights : CACHE_TTL_MS.lookup;
+  cache.set(key, { expires: Date.now() + ttl, promise });
+  if (cache.size > CACHE_MAX_ENTRIES) cache.delete(cache.keys().next().value);
+  promise.catch(() => cache.delete(key)); // never cache failures
+  return promise;
 }
 
 // ---------- Parsing (exported for tests) ----------
