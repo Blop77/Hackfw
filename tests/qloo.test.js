@@ -64,6 +64,17 @@ test('categorize sorts places by tags and name', () => {
   assert.equal(categorize(['Indian Restaurant']), 'food');
   assert.equal(categorize([], 'Pashan Lake'), 'sight');
   assert.equal(categorize(['Gym']), 'other');
+  assert.equal(categorize(['urn:tag:category:place:coffee_shop']), 'cafe');
+});
+
+test('categorize matches whole words and lets the most matching tags win', () => {
+  // Real tags from a live ride: an Asian restaurant was labelled a café.
+  assert.equal(categorize(['Lunch reservations recommended', 'Elegant', 'Asian restaurant', 'Free parking lot'], 'Coriander Kitchen'), 'food');
+  assert.equal(categorize(['Coffee and tea', 'Delivery', 'Osho garden', 'Reservations required'], 'Koji'), 'cafe');
+  assert.equal(categorize(['Steakhouse']), 'food'); // not "tea"
+  assert.equal(categorize(['Barber shop']), 'other'); // not "bar"
+  assert.equal(categorize(['Hotel', 'Restaurant']), 'stay');
+  assert.equal(categorize(['Business meetings', 'Morning', 'City view', 'Laundry service']), 'stay');
 });
 
 test('live mode: findTasteEntity prefers the requested type', async () => {

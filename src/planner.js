@@ -18,6 +18,9 @@ const DISTANCE_SLACK = 1.15;
 // (towards or away from it) is worth this much affinity.
 const DISTANCE_WEIGHT = 0.6;
 
+// Hotels and other places to stay make odd bike stops, so they're skipped unless asked for.
+const DEFAULT_PREFER = { stay: 0 };
+
 // Each extra stop of an already-chosen category is worth this much less, so rides mix cafés, food and sights.
 const REPEAT_FACTOR = 0.75;
 
@@ -48,7 +51,7 @@ export function chooseStops({ start, end = start, candidates, distanceKm, maxSto
   while (chosen.length < maxStops) {
     let best = null;
     for (const c of remaining) {
-      const weight = prefer[c.category] ?? 1;
+      const weight = prefer[c.category] ?? DEFAULT_PREFER[c.category] ?? 1;
       if (weight <= 0) continue;
 
       let insertAt = -1;
@@ -83,7 +86,7 @@ function round2(x) {
   return Math.round(x * 100) / 100;
 }
 
-const CATEGORY_LABEL = { cafe: 'Café', food: 'Food', sight: 'Sight', other: 'Stop' };
+const CATEGORY_LABEL = { cafe: 'Café', food: 'Food', sight: 'Sight', stay: 'Stay', other: 'Stop' };
 
 /** A reason built only from the data, used until (or unless) the agent writes a better one. */
 export function defaultReason(stop, tastes) {

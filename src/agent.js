@@ -53,6 +53,7 @@ const TOOLS = [
             cafe: { type: 'number' },
             food: { type: 'number' },
             sight: { type: 'number' },
+            stay: { type: 'number', description: 'Hotels and other places to stay. Excluded (0) unless the rider asks.' },
           },
         },
         max_stops: { type: 'integer', description: 'How many stops (1-6). Default 3.' },
