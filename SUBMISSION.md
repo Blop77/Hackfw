@@ -80,8 +80,8 @@ javascript, node.js, qloo, claude, anthropic-api, leaflet, openstreetmap, osrm, 
 
 ## Try it out links
 
-- GitHub: https://github.com/Blop77/Hackfw
-- Live demo: TODO (Render URL after deploying)
+- GitHub: https://github.com/Blop77/Qloo
+- Live demo: https://ridetaste.onrender.com
 
 ## Media
 
