@@ -186,10 +186,16 @@ function downloadGpx(ride) {
 
 // ---------- Chat ----------
 
+// The agent sometimes writes **bold**; show it as bold instead of raw asterisks. Everything else is escaped.
+function formatReply(text) {
+  return escapeHtml(text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+}
+
 function addMessage(kind, text) {
   const li = document.createElement('li');
   li.className = kind;
-  li.textContent = text;
+  if (kind === 'bot') li.innerHTML = formatReply(text);
+  else li.textContent = text;
   $('messages').append(li);
   li.scrollIntoView({ block: 'nearest' });
   return li;
