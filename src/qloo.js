@@ -170,6 +170,8 @@ function tagNames(entity) {
 
 const CATEGORY_WORDS = {
   stay: ['hotel', 'resort', 'hostel', 'motel', 'lodging', 'guest house', 'homestay', 'laundry service', 'room service'],
+  // Not "city": lots of real cafés are tagged "City center".
+  area: ['district', 'urban district', 'neighborhood', 'neighbourhood', 'locality', 'suburb'],
   food: ['restaurant', 'food', 'dining', 'diner', 'eatery', 'bistro', 'kitchen', 'bar', 'pub', 'street food', 'dhaba', 'grill', 'steakhouse', 'pizzeria', 'brewery', 'lunch', 'dinner'],
   cafe: ['cafe', 'café', 'coffee', 'coffee shop', 'tea', 'tea house', 'teahouse', 'bakery', 'dessert', 'juice', 'ice cream', 'patisserie'],
   culture: ['theatre', 'theater', 'concert hall', 'music venue', 'jazz', 'opera', 'performing arts', 'cinema', 'comedy club', 'bookstore', 'bookshop', 'library', 'arts centre', 'arts center'],
@@ -188,7 +190,7 @@ const CATEGORY_PATTERNS = Object.fromEntries(
 );
 
 /**
- * Puts a place into 'stay', 'food', 'cafe', 'culture', 'sight' or 'other' using its tags and name.
+ * Puts a place into 'stay', 'area', 'food', 'cafe', 'culture', 'sight' or 'other' using its tags and name.
  * The category with the most matches wins (the name counts double); ties go in the order listed above.
  */
 export function categorize(tags, name = '') {

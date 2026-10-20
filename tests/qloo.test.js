@@ -91,6 +91,12 @@ test('categorize matches whole words and lets the most matching tags win', () =>
   assert.equal(categorize(['Business meetings', 'Morning', 'City view', 'Laundry service']), 'stay');
 });
 
+test('categorize: whole districts and cities are areas, not stops', () => {
+  // Real tags from a live Pune ride, where "Pune city" came out as a stop.
+  assert.equal(categorize(['Central urban district', 'City center', 'Dining drinking', 'Casual'], 'Pune city'), 'area');
+  assert.equal(categorize(['Coffee and tea', 'Honey chilli potato', 'Social', 'City center'], 'FC Road SOCIAL'), 'cafe');
+});
+
 test('categorize: theatres and music venues are culture, and the name outweighs a generic tag', () => {
   // Real tags from a live New York ride, where both came out as "Food".
   assert.equal(categorize(['Sophisticated', 'Debit cards', 'City center', 'Dining drinking'], 'Minskoff Theatre'), 'culture');
