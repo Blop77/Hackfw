@@ -77,7 +77,8 @@ test('categorize sorts places by tags and name', () => {
   assert.equal(categorize(['Coffee Shop']), 'cafe');
   assert.equal(categorize(['Indian Restaurant']), 'food');
   assert.equal(categorize([], 'Pashan Lake'), 'sight');
-  assert.equal(categorize(['Gym']), 'other');
+  assert.equal(categorize(['Gym']), 'errand');
+  assert.equal(categorize(['Rooftop', 'Sunset']), 'other');
   assert.equal(categorize(['urn:tag:category:place:coffee_shop']), 'cafe');
 });
 
@@ -86,7 +87,7 @@ test('categorize matches whole words and lets the most matching tags win', () =>
   assert.equal(categorize(['Lunch reservations recommended', 'Elegant', 'Asian restaurant', 'Free parking lot'], 'Coriander Kitchen'), 'food');
   assert.equal(categorize(['Coffee and tea', 'Delivery', 'Osho garden', 'Reservations required'], 'Koji'), 'cafe');
   assert.equal(categorize(['Steakhouse']), 'food'); // not "tea"
-  assert.equal(categorize(['Barber shop']), 'other'); // not "bar"
+  assert.equal(categorize(['Barber shop']), 'errand'); // a service, and not "bar" (food)
   assert.equal(categorize(['Hotel', 'Restaurant']), 'stay');
   assert.equal(categorize(['Business meetings', 'Morning', 'City view', 'Laundry service']), 'stay');
 });
@@ -105,6 +106,16 @@ test('categorize: an area stays an area even when sight tags outnumber the distr
   assert.equal(categorize(['Historic', 'Landmark'], 'Shaniwar Wada'), 'sight');
   assert.equal(categorize(['Coffee and tea', 'City center', 'Central'], 'Cafe Goodluck'), 'cafe');
   assert.equal(categorize(['Restaurant', 'City center'], 'City Pride Kitchen'), 'food'); // "City" only counts at the end of a name
+});
+
+test('categorize: shops and services are errands, whatever else they are tagged', () => {
+  // The live stop that replaced "Pune city", plus a hidden sight tag.
+  const tags = ['Beauty products wholesaler', 'Personal grooming', 'Clean', 'Destination', 'Urban', 'Commercial', 'Historic', 'Temple'];
+  assert.equal(categorize(tags, 'Indrani Cosmetics'), 'errand');
+  assert.equal(categorize(['Hair salon'], 'Looks'), 'errand');
+  assert.equal(categorize(['Coffee and tea', 'Groups of friends'], 'FC Road SOCIAL'), 'cafe');
+  assert.equal(categorize(['Bakery', 'Restaurant', 'Delivery'], 'German Bakery'), 'cafe'); // as on the live ride
+  assert.equal(categorize(['Barbecue', 'Bar'], 'Barbeque Nation'), 'food'); // "barber" isn't "bar", and vice versa
 });
 
 test('categorize: theatres and music venues are culture, and the name outweighs a generic tag', () => {

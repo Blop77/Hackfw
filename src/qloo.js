@@ -190,16 +190,19 @@ const CATEGORY_PATTERNS = Object.fromEntries(
 );
 
 /**
- * Puts a place into 'stay', 'area', 'food', 'cafe', 'culture', 'sight' or 'other' using its tags and name.
+ * Puts a place into 'area', 'errand', 'stay', 'food', 'cafe', 'culture', 'sight' or 'other' using its tags and name.
  * The category with the most matches wins (the name counts double); ties go in the order listed above.
  */
 // A whole area isn't a stop, whatever else it's tagged with ("Pune city" also carries sight tags).
 const AREA_TAG = /(?<![\p{L}])(urban district|neighbou?rhood|locality|suburb)(?![\p{L}])/iu;
 const AREA_NAME = /(?<![\p{L}])(city|town|district|neighbou?rhood|suburb)$/iu;
+// Shops and services are errands, not ride stops ("Indrani Cosmetics" also carried sight tags).
+const ERRAND = /(?<![\p{L}])(wholesaler|retailer|supermarket|grocery|pharmacy|chemist|hardware|electronics store|mobile phone|cosmetics|beauty products|salon|barber|gym|bank|atm|hospital|clinic|dentist|office|coworking|car dealer|auto repair|real estate|laundromat)(?![\p{L}])/iu;
 
 export function categorize(tags, name = '') {
   const clean = (t) => String(t).replace(/[_:]/g, ' ');
   if (AREA_NAME.test(clean(name).trim()) || tags.some((t) => AREA_TAG.test(clean(t)))) return 'area';
+  if ([name, ...tags].some((t) => ERRAND.test(clean(t)))) return 'errand';
   const texts = [...tags.map((t) => [clean(t), 1]), [clean(name), NAME_WEIGHT]];
   let best = 'other';
   let bestHits = 0;
