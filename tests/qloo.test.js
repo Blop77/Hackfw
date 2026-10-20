@@ -97,6 +97,16 @@ test('categorize: whole districts and cities are areas, not stops', () => {
   assert.equal(categorize(['Coffee and tea', 'Honey chilli potato', 'Social', 'City center'], 'FC Road SOCIAL'), 'cafe');
 });
 
+test('categorize: an area stays an area even when sight tags outnumber the district tag', () => {
+  // The live "Pune city" entity: its hidden tags out-voted "Central urban district" and it became a Sight.
+  const tags = ['Central urban district', 'City center', 'Dining drinking', 'Casual', 'Culinary discovery', 'Central', 'Historic', 'Landmark'];
+  assert.equal(categorize(tags, 'Pune city'), 'area');
+  assert.equal(categorize(['Historic', 'Landmark', 'Attraction'], 'Pune city'), 'area'); // by name alone
+  assert.equal(categorize(['Historic', 'Landmark'], 'Shaniwar Wada'), 'sight');
+  assert.equal(categorize(['Coffee and tea', 'City center', 'Central'], 'Cafe Goodluck'), 'cafe');
+  assert.equal(categorize(['Restaurant', 'City center'], 'City Pride Kitchen'), 'food'); // "City" only counts at the end of a name
+});
+
 test('categorize: theatres and music venues are culture, and the name outweighs a generic tag', () => {
   // Real tags from a live New York ride, where both came out as "Food".
   assert.equal(categorize(['Sophisticated', 'Debit cards', 'City center', 'Dining drinking'], 'Minskoff Theatre'), 'culture');
