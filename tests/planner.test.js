@@ -70,6 +70,10 @@ test('planRide (demo data) returns an explained loop ride', async () => {
   );
   assert.equal(ride.dataSource, 'demo');
   assert.equal(ride.loop, true);
+  // What the "How Qloo picked these stops" panel shows.
+  assert.deepEqual(ride.tastes.map((t) => [t.query, t.type]), [['Spirited Away', 'urn:entity:movie'], ['masala dosa', null]]);
+  assert.equal(ride.searchRadiusKm, 7.5);
+  assert.ok(ride.candidatesConsidered >= ride.stops.length);
   assert.ok(ride.stops.length >= 1 && ride.stops.length <= 3);
   assert.deepEqual(ride.stops.map((s) => s.order), ride.stops.map((_, i) => i + 1));
   for (const s of ride.stops) assert.match(s.why, /^Sample affinity \d+% for people who like Spirited Away and masala dosa\.$/);

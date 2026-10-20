@@ -76,6 +76,8 @@ function renderRide(ride) {
     <button type="button" class="gpx" id="gpx-btn">Download GPX</button>`;
   $('gpx-btn').addEventListener('click', () => downloadGpx(ride));
 
+  renderHowQloo(ride);
+
   $('stops').innerHTML = ride.stops.length
     ? ride.stops.map(stopCard).join('')
     : '<li class="note">No stops fit this ride. Try a longer distance or different favourites.</li>';
@@ -97,11 +99,54 @@ function stopCard(s) {
           <span>at km ${s.atKm}</span>
         </div>
         <p class="why">${escapeHtml(s.why)}</p>
+        ${s.tags?.length ? `<div class="tags" title="Tags Qloo returned for this place">${s.tags.slice(0, 4).map((t) => `<span>${escapeHtml(tagLabel(t))}</span>`).join('')}</div>` : ''}
         <div class="links">
           ${s.address ? `${escapeHtml(s.address)} · ` : ''}<a href="${maps}" target="_blank" rel="noopener">Open in Maps</a>
         </div>
       </div>
     </li>`;
+}
+
+// Qloo tags can be names ("Coffee Shop") or ids ("urn:tag:category:place:coffee_shop").
+function tagLabel(tag) {
+  const last = String(tag).split(':').pop().replace(/_/g, ' ');
+  return last.charAt(0).toUpperCase() + last.slice(1);
+}
+
+const TYPE_LABEL = {
+  'urn:entity:artist': 'artist',
+  'urn:entity:movie': 'film',
+  'urn:entity:tv_show': 'TV show',
+  'urn:entity:book': 'book',
+  'urn:entity:podcast': 'podcast',
+  'urn:entity:video_game': 'video game',
+  'urn:entity:brand': 'brand',
+  'urn:entity:person': 'person',
+  'urn:entity:place': 'place',
+  'urn:entity:destination': 'destination',
+};
+
+/** Explains the three steps from favourites to stops, using this ride's own data. */
+function renderHowQloo(ride) {
+  const panel = $('how-qloo');
+  panel.hidden = false;
+  const demo = ride.dataSource === 'demo';
+  const tastes = ride.tastes
+    .map((t) => {
+      const type = TYPE_LABEL[t.type] ? ` <span class="hint">(${TYPE_LABEL[t.type]})</span>` : '';
+      const renamed = t.name !== t.query ? ` <span class="hint">for "${escapeHtml(t.query)}"</span>` : '';
+      return `<strong>${escapeHtml(t.name)}</strong>${type}${renamed}`;
+    })
+    .join(' · ');
+  const missing = ride.missingTastes?.length ? ` Qloo didn't find: ${escapeHtml(ride.missingTastes.join(', '))}.` : '';
+  $('how-qloo-demo').hidden = !demo;
+  $('how-qloo-steps').innerHTML = `
+    <li><strong>Your taste → Qloo's taste graph.</strong> Qloo's Search API matched your favourites to entities: ${tastes}.${missing}</li>
+    <li><strong>Taste → places.</strong> Qloo's Insights API looked within ${ride.searchRadiusKm} km of ${escapeHtml(ride.start.label)}
+      for places that people with this taste enjoy. It returned <strong>${ride.candidatesConsidered}</strong>, each with an affinity score
+      (the "% match" on each stop).</li>
+    <li><strong>Places → your ride.</strong> RideTaste picked the ${ride.stops.length} stop${ride.stops.length === 1 ? '' : 's'} with the best mix of
+      Qloo affinity, variety (cafés, food, sights) and fit to your ${ride.requestedKm} km, then routed it by bike.</li>`;
 }
 
 function formatDuration(min) {
@@ -171,6 +216,24 @@ function showResults(ride) {
 // ---------- Quick plan form ----------
 
 $('distance').addEventListener('input', (e) => ($('distance-out').value = e.target.value));
+
+// One-click examples, so a first-time visitor sees a full ride without thinking up inputs.
+const EXAMPLES = [
+  { start: 'FC Road, Pune', distanceKm: 12, tastes: 'Spirited Away, Studio Ghibli, filter coffee' },
+  { start: 'Koregaon Park, Pune', distanceKm: 15, tastes: 'Prateek Kuhad, The Local Train, misal pav' },
+  { start: 'Washington Square Park, New York', distanceKm: 15, tastes: 'The Grand Budapest Hotel, Vampire Weekend, bagels' },
+];
+
+for (const button of document.querySelectorAll('[data-example]')) {
+  button.addEventListener('click', () => {
+    const ex = EXAMPLES[Number(button.dataset.example)];
+    $('start').value = ex.start;
+    $('distance').value = ex.distanceKm;
+    $('distance-out').value = ex.distanceKm;
+    $('tastes').value = ex.tastes;
+    $('plan-form').requestSubmit();
+  });
+}
 
 $('plan-form').addEventListener('submit', async (e) => {
   e.preventDefault();
