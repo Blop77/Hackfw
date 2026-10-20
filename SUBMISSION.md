@@ -41,7 +41,7 @@ $$\text{score} = \text{affinity} \times \text{preference} \times 0.75^{\text{rep
 
 where *L* is the current ride length, *T* the requested distance and \\( \lambda = 0.6/T \\). While the ride is too short a detour helps; once it's long enough a detour costs. The 0.75 repeat factor mixes cafés, food and sights.
 - **Maps:** OpenStreetMap geocoding (Nominatim), bike routing (OSRM bike profile) and Leaflet.
-- **Stack:** Node.js with no framework, plain HTML/CSS/JS and 35 automated tests (`node --test`).
+- **Stack:** Node.js with no framework, plain HTML/CSS/JS and 56 automated tests (`node --test`).
 
 ## Challenges I ran into
 - **Rides came out far too short.** My first scoring rule just penalised detours, so a 15 km request gave a 5 km ride, because the best-matching places were all close together. Scoring by how much a stop moves the ride *towards the requested distance* fixed it.
@@ -56,7 +56,7 @@ where *L* is the current ride length, *T* the requested distance and \\( \lambda
 - TODO (e.g. agent tool design, the Qloo taste graph, routing APIs)
 
 ## What's next for RideTaste
-- Group rides that blend everyone's taste
+- Group rides with more than two riders
 - Opening hours, elevation and traffic-aware routing
 - Save and share favourite rides
 ```
@@ -65,7 +65,7 @@ where *L* is the current ride length, *T* the requested distance and \\( \lambda
 
 ```markdown
 ## Try it in 30 seconds
-1. Open the live demo: <RENDER URL>. If the first load is slow, the free server is waking up; give it up to a minute.
+1. Open the live demo: https://ridetaste.onrender.com. If the first load is slow, the free server is waking up; give it up to a minute.
 2. Click one of the **"Try one"** examples (e.g. *Ghibli & filter coffee · Pune*, or *Ride with a friend · Pune*). The agent plans a ride with Qloo.
 3. Open **"How Qloo picked these stops"** under the map to see the Qloo entities, the places Qloo returned, and how the stops were chosen.
 4. In the chat, tap **More food** or type *"make it shorter and end near a lake"* to watch the agent re-plan.
@@ -86,4 +86,4 @@ javascript, node.js, qloo, claude, anthropic-api, leaflet, openstreetmap, osrm, 
 ## Media
 
 - Screenshots (3:2): chat and map, stop cards, mobile view
-- Video: TODO 1–2 minute screen recording on YouTube
+- Video demo link: https://youtu.be/au5etS24uRk
