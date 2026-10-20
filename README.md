@@ -63,6 +63,8 @@ each stop. It is told to base every claim on the tool data and never invent open
 - **"How Qloo picked these stops"**: a panel on every ride that shows which Qloo entities your favourites matched,
   how many places Qloo's Insights API returned, and how the stops were chosen, plus Qloo's tags on each stop
 - Chat-based planning with follow-up changes, plus a quick-plan form that works without the AI agent
+- **Keeps working if the AI is down**: if Claude is unavailable (no credits, overloaded, offline), chat pauses for
+  two minutes and rides come from the quick planner, so Qloo still picks every stop
 - Loop rides or one-way rides (start A, finish B)
 - Taste-matched stops with a match score and a reason for each
 - Real bike routing on OpenStreetMap, with "at km X" for each stop

@@ -14,6 +14,10 @@ const PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.
 const MAX_BODY_BYTES = 32 * 1024;
 const MAX_SESSIONS = 500;
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+// When Claude fails (no credits, bad key, overloaded, offline), chat pauses for a while and the
+// web app plans with the quick planner instead, so rides keep working.
+const AGENT_PAUSE_MS = 2 * 60 * 1000;
+const AGENT_DOWN = 'The AI chat is taking a break, so rides come from the quick planner for now. Qloo still picks every stop.';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -87,12 +91,14 @@ async function serveStatic(req, res) {
 
 export function createApp({ agent, planDeps } = {}) {
   const rideAgent = agent ?? (agentIsAvailable() ? createAgent() : null);
+  let agentPausedUntil = 0;
+  const agentReady = () => Boolean(rideAgent) && Date.now() >= agentPausedUntil;
 
   return createServer(async (req, res) => {
     const { pathname } = new URL(req.url, 'http://x');
     try {
       if (req.method === 'GET' && pathname === '/api/status') {
-        return sendJson(res, 200, { agent: Boolean(rideAgent), qloo: qlooIsLive() ? 'live' : 'demo' });
+        return sendJson(res, 200, { agent: agentReady(), qloo: qlooIsLive() ? 'live' : 'demo' });
       }
 
       // Quick plan: no AI agent, just the planning pipeline. Works without an Anthropic key.
@@ -109,7 +115,8 @@ export function createApp({ agent, planDeps } = {}) {
       }
 
       if (req.method === 'POST' && pathname === '/api/chat') {
-        if (!rideAgent) return sendJson(res, 503, { error: 'The chat agent needs ANTHROPIC_API_KEY. Use the quick plan form instead.' });
+        if (!rideAgent) return sendJson(res, 503, { error: 'The chat agent needs ANTHROPIC_API_KEY. Use the quick plan form instead.', agentDown: true });
+        if (!agentReady()) return sendJson(res, 503, { error: AGENT_DOWN, agentDown: true });
         const body = await readJson(req);
         const message = String(body.message ?? '').trim().slice(0, 2000);
         if (!message) return sendJson(res, 400, { error: 'Message is empty' });
@@ -119,6 +126,12 @@ export function createApp({ agent, planDeps } = {}) {
         try {
           const { reply, ride } = await rideAgent.chat(session, message);
           return sendJson(res, 200, { sessionId: session.id, reply, ride });
+        } catch (err) {
+          if (!(err instanceof Anthropic.APIError)) throw err;
+          if (err instanceof Anthropic.AuthenticationError) console.error('Anthropic authentication failed: check ANTHROPIC_API_KEY');
+          console.error(`Claude unavailable (${err.status ?? err.name}), pausing chat: ${err.message}`);
+          agentPausedUntil = Date.now() + AGENT_PAUSE_MS;
+          return sendJson(res, 503, { error: AGENT_DOWN, agentDown: true });
         } finally {
           session.busy = false;
         }
@@ -129,11 +142,6 @@ export function createApp({ agent, planDeps } = {}) {
     } catch (err) {
       if (err instanceof PlanError) return sendJson(res, 422, { error: err.message });
       if (err.status === 400 || err.status === 413) return sendJson(res, err.status, { error: err.message });
-      if (err instanceof Anthropic.RateLimitError) return sendJson(res, 429, { error: 'The AI is busy. Try again in a minute.' });
-      if (err instanceof Anthropic.AuthenticationError) {
-        console.error('Anthropic authentication failed: check ANTHROPIC_API_KEY');
-        return sendJson(res, 502, { error: 'The AI service rejected our key.' });
-      }
       console.error(err);
       return sendJson(res, 500, { error: 'Something went wrong. Please try again.' });
     }

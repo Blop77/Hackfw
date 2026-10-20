@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
+import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../src/config.js';
 import { createApp } from '../src/server.js';
 import { offlineFetch } from './helpers.js';
@@ -65,6 +66,34 @@ test('POST /api/chat rejects empty messages and bad JSON', async () => {
   assert.equal((await post('/api/chat', { message: '  ' })).status, 400);
   const res = await fetch(`${base}/api/chat`, { method: 'POST', body: '{not json' });
   assert.equal(res.status, 400);
+});
+
+test('POST /api/chat pauses chat when Claude is unavailable, so the app falls back to the quick planner', async () => {
+  let calls = 0;
+  const outOfCredits = {
+    chat: async () => {
+      calls++;
+      throw Anthropic.APIError.generate(400, { type: 'error', error: { type: 'invalid_request_error' } }, 'Your credit balance is too low', new Headers());
+    },
+  };
+  const app = createApp({ agent: outOfCredits, planDeps: { fetchImpl: offlineFetch } });
+  await new Promise((resolve) => app.listen(0, resolve));
+  const url = `http://127.0.0.1:${app.address().port}`;
+  const chat = () => fetch(`${url}/api/chat`, { method: 'POST', body: JSON.stringify({ message: 'plan a ride' }) });
+  try {
+    const res = await chat();
+    assert.equal(res.status, 503);
+    const body = await res.json();
+    assert.equal(body.agentDown, true);
+    assert.doesNotMatch(body.error, /credit/); // the raw API error stays in the server log
+    assert.equal((await (await fetch(`${url}/api/status`)).json()).agent, false);
+
+    // While paused, chat answers at once without calling Claude again.
+    assert.equal((await chat()).status, 503);
+    assert.equal(calls, 1);
+  } finally {
+    app.close();
+  }
 });
 
 test('serves the web app and blocks path traversal', async () => {
