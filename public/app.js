@@ -124,6 +124,7 @@ const TYPE_LABEL = {
   'urn:entity:person': 'person',
   'urn:entity:place': 'place',
   'urn:entity:destination': 'destination',
+  tag: 'food & drink tag',
 };
 
 /** Explains the three steps from favourites to stops, using this ride's own data. */
@@ -141,7 +142,7 @@ function renderHowQloo(ride) {
   const missing = ride.missingTastes?.length ? ` Qloo didn't find: ${escapeHtml(ride.missingTastes.join(', '))}.` : '';
   $('how-qloo-demo').hidden = !demo;
   $('how-qloo-steps').innerHTML = `
-    <li><strong>Your taste → Qloo's taste graph.</strong> Qloo's Search API matched your favourites to entities: ${tastes}.${missing}</li>
+    <li><strong>Your taste → Qloo's taste graph.</strong> Qloo's Search and Tags APIs matched your favourites: ${tastes}.${missing}</li>
     <li><strong>Taste → places.</strong> Qloo's Insights API looked within ${ride.searchRadiusKm} km of ${escapeHtml(ride.start.label)}
       for places that people with this taste enjoy. It returned <strong>${ride.candidatesConsidered}</strong>, each with an affinity score
       (the "% match" on each stop).</li>

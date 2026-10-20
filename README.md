@@ -17,6 +17,7 @@ Built for the [Qloo Agentic Hackathon](https://qloo.devpost.com) (2026).
 ```
  rider ──chat──► Claude agent ──plan_ride──► 1. geocode start (OpenStreetMap Nominatim)
                      │                       2. favourites → Qloo entities      (Qloo /search)
+                     │                          foods & drinks → Qloo tags      (Qloo /v2/tags)
                      │                       3. entities + location → places   (Qloo /v2/insights)
                      │                       4. pick stops (taste vs distance)
                      │                       5. bike route through the stops   (OSRM bike profile)
@@ -26,7 +27,8 @@ Built for the [Qloo Agentic Hackathon](https://qloo.devpost.com) (2026).
 
 **Qloo is the core of the app.** Without it there's no way to go from "I love *Spirited Away* and
 Prateek Kuhad" to "this café and this lake". Qloo's cross-domain taste graph makes that jump:
-your favourites become `signal.interests.entities` and the location becomes `filter.location`
+your favourites become `signal.interests.entities`, foods and drinks become `signal.interests.tags`
+(looked up with `/v2/tags`, since a dish isn't an entity), and the location becomes `filter.location`
 on a `urn:entity:place` insights query. Each place comes back with an **affinity** score.
 
 **Choosing stops.** The planner greedily inserts stops at their cheapest point in the ride. Each round it

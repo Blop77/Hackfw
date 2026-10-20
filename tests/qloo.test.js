@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { config } from '../src/config.js';
-import { categorize, findTasteEntity, findTastePlaces, parseInsightPlaces, parseSearchResults } from '../src/qloo.js';
+import {
+  categorize,
+  findTasteEntity,
+  findTastePlaces,
+  findTasteTag,
+  parseInsightPlaces,
+  parseSearchResults,
+  parseTagResults,
+  pickFoodTag,
+} from '../src/qloo.js';
 import { FC_ROAD, fakeFetch } from './helpers.js';
 
 const realKey = config.qlooApiKey;
@@ -125,4 +134,45 @@ test('demo mode: no sample data outside Pune', async () => {
   config.qlooApiKey = '';
   const places = await findTastePlaces({ tastes: [{ name: 'jazz' }], center: { lat: 51.5, lon: -0.12 }, radiusKm: 10 });
   assert.deepEqual(places, []);
+});
+
+test('parseTagResults and pickFoodTag choose a close, place-related tag', () => {
+  const tags = parseTagResults({
+    results: {
+      tags: [
+        { id: 'urn:tag:genre:book:cooking', name: 'Cooking', types: ['urn:entity:book'] },
+        { id: 'urn:tag:genre:place:restaurant:south_indian', name: 'South Indian', types: ['urn:entity:place'] },
+        { tag_id: 'urn:tag:category:place:coffee_shop', name: 'Coffee Shop' },
+        { id: 'not-a-tag', name: 'Broken' },
+      ],
+    },
+  });
+  assert.deepEqual(tags.map((t) => t.id), [
+    'urn:tag:genre:book:cooking',
+    'urn:tag:genre:place:restaurant:south_indian',
+    'urn:tag:category:place:coffee_shop',
+  ]);
+  assert.equal(pickFoodTag(tags, 'filter coffee').id, 'urn:tag:category:place:coffee_shop');
+  assert.equal(pickFoodTag(tags, 'south indian').id, 'urn:tag:genre:place:restaurant:south_indian');
+  assert.equal(pickFoodTag(tags, 'masala dosa'), null); // no shared word: better to fall back than guess
+});
+
+test('live mode: findTasteTag queries /v2/tags', async () => {
+  config.qlooApiKey = 'test-key';
+  const fetchImpl = fakeFetch([['/v2/tags', { results: { tags: [{ id: 'urn:tag:category:place:ramen', name: 'Ramen' }] } }]]);
+  const tag = await findTasteTag('ramen', { fetchImpl });
+  assert.equal(tag.id, 'urn:tag:category:place:ramen');
+  assert.equal(new URL(fetchImpl.calls[0]).searchParams.get('filter.query'), 'ramen');
+});
+
+test('live mode: findTastePlaces sends entities and tags as separate signals', async () => {
+  config.qlooApiKey = 'test-key';
+  const fetchImpl = fakeFetch([['/v2/insights', { results: { entities: [] } }]]);
+  await findTastePlaces(
+    { tastes: [{ id: 'E1', kind: 'entity' }, { id: 'urn:tag:x', kind: 'tag' }], center: FC_ROAD, radiusKm: 5 },
+    { fetchImpl },
+  );
+  const url = new URL(fetchImpl.calls[0]);
+  assert.equal(url.searchParams.get('signal.interests.entities'), 'E1');
+  assert.equal(url.searchParams.get('signal.interests.tags'), 'urn:tag:x');
 });

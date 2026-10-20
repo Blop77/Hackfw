@@ -4,7 +4,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from './config.js';
 import { planRide, PlanError } from './planner.js';
-import { TASTE_TYPES } from './qloo.js';
+import { TASTE_CATEGORIES } from './qloo.js';
 
 const MAX_TOOL_ROUNDS = 6;
 
@@ -12,7 +12,7 @@ const SYSTEM_PROMPT = `You are RideTaste, a friendly cycling buddy who plans bik
 
 How you work:
 1. Find out where the rider starts, roughly how far they want to ride, and a few things they love (films, music, books, food, shows, places). If the start or the tastes are missing, ask one short question. If the distance is missing, assume 15 km and say so.
-2. Call plan_ride. Put every favourite in "tastes" with the best-fitting category. Use "prefer" for wishes like "more food" (food: 2) or "no sightseeing" (sight: 0). Use "end" only when the rider wants to finish somewhere other than the start.
+2. Call plan_ride. Put every favourite in "tastes" with the best-fitting category; use "food" for dishes, drinks and cuisines. Use "prefer" for wishes like "more food" (food: 2) or "no sightseeing" (sight: 0). Use "end" only when the rider wants to finish somewhere other than the start.
 3. Then call show_ride once with one short "why" per stop (one sentence, under 25 words) and a two-sentence summary.
 4. Finally reply in 2-4 short sentences. The map and stop cards already show the details, so don't list every stop again.
 
@@ -41,7 +41,11 @@ const TOOLS = [
             type: 'object',
             properties: {
               name: { type: 'string', description: 'e.g. "Spirited Away", "Prateek Kuhad", "masala dosa".' },
-              category: { type: 'string', enum: Object.keys(TASTE_TYPES) },
+              category: {
+                type: 'string',
+                enum: TASTE_CATEGORIES,
+                description: 'Use "food" for dishes, drinks and cuisines (e.g. "filter coffee", "ramen"); they are matched to Qloo taste tags.',
+              },
             },
             required: ['name'],
           },
@@ -93,7 +97,10 @@ function planForModel(plan) {
     end: plan.loop ? '(loop back to start)' : plan.end.label,
     requestedKm: plan.requestedKm,
     route: { distanceKm: plan.route.distanceKm, durationMin: plan.route.durationMin, source: plan.route.source },
-    tastesRecognised: plan.tastes.map((t) => (t.name === t.query ? t.name : `${t.query} -> ${t.name}`)),
+    tastesRecognised: plan.tastes.map((t) => {
+      const as = t.kind === 'tag' ? ' (Qloo taste tag)' : '';
+      return t.name === t.query ? `${t.name}${as}` : `${t.query} -> ${t.name}${as}`;
+    }),
     missingTastes: plan.missingTastes,
     candidatesConsidered: plan.candidatesConsidered,
     stops: plan.stops.map((s) => ({
